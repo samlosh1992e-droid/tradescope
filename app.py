@@ -89,6 +89,12 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
 # Brevo (ex-Sendinblue) : https://brevo.com (gratuit 300 mails/jour).
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "").strip()
 MAIL_FROM_NAME = os.environ.get("MAIL_FROM_NAME", "TradeScope").strip()
+# Relais d'email gratuit sans domaine : Google Apps Script (voir MAIL_RELAY_URL).
+# Le relais envoie depuis ton Gmail, donc DKIM valide et envoi possible a
+# n'importe quel destinataire. Gratuit (100 mails/jour), HTTPS donc non bloque
+# par Render free.
+MAIL_RELAY_URL = os.environ.get("MAIL_RELAY_URL", "").strip()
+MAIL_RELAY_SECRET = os.environ.get("MAIL_RELAY_SECRET", "").strip()
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
 MAIL_LOG = os.path.join(os.path.dirname(__file__), "mails.log")
@@ -1088,11 +1094,41 @@ def _send_via_brevo(to, subject, html):
         return False
 
 
+def _send_via_relay(to, subject, html):
+    """Envoi via un relais Google Apps Script (HTTPS, gratuit, sans domaine).
+
+    Le script Apps Script execute MailApp.sendEmail depuis ton compte Gmail :
+    DKIM valide, envoi vers n'importe quel destinataire. MAIL_RELAY_SECRET est
+    verifie cote script pour eviter tout usage non autorise.
+    """
+    import json as _json
+    import urllib.request as _ur
+    import urllib.error as _ue
+    payload = {"secret": MAIL_RELAY_SECRET, "to": to,
+               "subject": subject, "html": html,
+               "name": MAIL_FROM_NAME or "TradeScope"}
+    req = _ur.Request(
+        MAIL_RELAY_URL,
+        data=_json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={"Content-Type": "application/json", "Accept": "application/json",
+                 "User-Agent": _MAIL_UA},
+    )
+    try:
+        with _ur.urlopen(req, timeout=25) as r:
+            print(f"[mail] Relay -> {r.status}")
+            return r.status in (200, 201)
+    except _ue.HTTPError as e:
+        print(f"[mail] Relay HTTP {e.code}: {e.read().decode('utf-8')[:200]}")
+        return False
+
+
 def send_mail(to, subject, text_html, categories=""):
-    """Envoie un email via Resend/Brevo (API HTTPS) ou SMTP, sinon mails.log.
+    """Envoie un email via relais Apps Script, Resend/Brevo (HTTPS) ou SMTP.
 
     Retourne True si un envoi reel a reussi. Render free bloque les ports SMTP
-    classiques : utiliser de preference RESEND_API_KEY ou BREVO_API_KEY.
+    classiques : utiliser MAIL_RELAY_URL (gratuit, tous destinataires) ou
+    RESEND_API_KEY / BREVO_API_KEY (mode test, proprietaire uniquement).
     """
     entry = (
         "=" * 60 + "\n"
@@ -1109,6 +1145,11 @@ def send_mail(to, subject, text_html, categories=""):
     except Exception:
         pass
 
+    if MAIL_RELAY_URL:
+        try:
+            return _send_via_relay(to, subject, text_html)
+        except Exception as e:
+            print(f"[mail] Relay erreur: {type(e).__name__}: {e}")
     if RESEND_API_KEY:
         try:
             return _send_via_resend(to, subject, text_html)
@@ -1672,7 +1713,8 @@ def admin():
             flash("Abonnement resilie : " + email, "success")
     elif action == "testmail":
         dest = request.args.get("email", "").strip().lower() or MAIL_TO_ADMIN or MAIL_FROM
-        provider = ("Resend" if RESEND_API_KEY else
+        provider = ("Relais Gmail" if MAIL_RELAY_URL else
+                    "Resend" if RESEND_API_KEY else
                     "Brevo" if BREVO_API_KEY else
                     "SMTP" if SMTP_HOST else "aucun")
         if not dest:
