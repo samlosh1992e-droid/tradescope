@@ -5,6 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TradeScope — Votre screenshot, analyses & plan d'action</title>
 <meta name="description" content="Envoyez un screenshot de votre graphique (BTC, or, forex…) et recevez une analyse technique avec entrée, stop loss et TP1/TP2/TP3. 3 analyses gratuites.">
+<meta property="og:title" content="TradeScope — Analyse ton graphique en 10 secondes">
+<meta property="og:description" content="Capture d'écran → entrée · stop-loss · TP1/TP2/TP3 sur 7 unités de temps. Or, forex, crypto, actions. 3 analyses offertes.">
+<meta property="og:image" content="{{ url_for('static', filename='og-image.png', _external=True) }}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="{{ request.url }}">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="TradeScope — Analyse ton graphique en 10 secondes">
+<meta name="twitter:description" content="Capture d'écran → entrée · stop-loss · TP1/TP2/TP3. 3 analyses gratuites.">
+<meta name="twitter:image" content="{{ url_for('static', filename='og-image.png', _external=True) }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') + '?v=20260913e' }}">
 </head>
 <body>
