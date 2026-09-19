@@ -1,0 +1,9 @@
+flask>=3.0
+yfinance>=1.6
+matplotlib>=3.8
+pandas>=2.0
+pillow>=10.0
+numpy>=1.26
+opencv-python-headless>=4.8
+gunicorn>=21.2
+qrcode>=7.4

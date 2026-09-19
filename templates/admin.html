@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Espace pro — TradeScope</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') + '?v=20260913e' }}">
+</head>
+<body>
+<div class="brand-bg" aria-hidden="true"></div>
+<header class="site">
+  <div class="container">
+    <a class="brand" href="/"><span class="mark">⇉</span> TradeScope</a>
+    <nav><a href="/account">Mon compte</a></nav>
+  </div>
+</header>
+
+<div class="container" style="padding:30px 20px;">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}
+  {% endwith %}
+
+  <h1 style="font-size:26px;">📊 Tableau de bord <span class="muted small" style="font-weight:400;">(temps réel)</span></h1>
+  <div class="grid-2" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); margin:16px 0;">
+    <div class="panel" style="text-align:center;"><div style="font-size:28px;font-weight:800;" id="st-total" data-count>{{ stats.total_visits }}</div><div class="muted small">Pages vues</div></div>
+    <div class="panel" style="text-align:center;"><div style="font-size:28px;font-weight:800;" id="st-unique" data-count>{{ stats.unique_visitors }}</div><div class="muted small">Visiteurs uniques</div></div>
+    <div class="panel" style="text-align:center;"><div style="font-size:28px;font-weight:800;" id="st-emails" data-count>{{ stats.nb_emails }}</div><div class="muted small">Emails enregistrés</div></div>
+    <div class="panel" style="text-align:center;"><div style="font-size:28px;font-weight:800;" id="st-users" data-count>{{ stats.nb_users }}</div><div class="muted small">Comptes créés</div></div>
+    <div class="panel" style="text-align:center;"><div style="font-size:28px;font-weight:800;color:var(--green);" id="st-analyses" data-count>{{ stats.nb_analyses }}</div><div class="muted small">Analyses lancées</div></div>
+    <div class="panel" style="text-align:center;"><div style="font-size:28px;font-weight:800;color:var(--gold);" id="st-upgrades" data-count>{{ stats.nb_upgrade_views }}</div><div class="muted small">Vues page abonnement</div></div>
+    <div class="panel" style="text-align:center;"><div style="font-size:28px;font-weight:800;color:var(--blue);" id="st-subs" data-count>{{ stats.active_subs }}</div><div class="muted small">Abonnements actifs</div></div>
+    <div class="panel" style="text-align:center;"><div style="font-size:28px;font-weight:800;color:var(--red);" data-count>{{ stats.nb_webhooks }}</div><div class="muted small">Notifications webhook</div></div>
+  </div>
+
+  <h1 style="font-size:22px; margin-top:10px;">Email récemment utilisés (tentatives)</h1>
+  <p class="muted small">Les adresses qui ont tenté de s'enregistrer sur le site.</p>
+  <div style="display:flex; flex-wrap:wrap; gap:8px; margin:10px 0 20px;">
+    {% for e in recent_emails %}
+    <span class="conf-badge conf-basse">{{ e['email'] }}</span>
+    {% else %}
+    <span class="muted small">Aucune tentative pour l'instant.</span>
+    {% endfor %}
+  </div>
+
+  <h1 style="font-size:22px; margin-top:10px;">💳 Abonnements</h1>
+  <table class="plan">
+    <thead><tr><th>Email</th><th>Statut</th><th>Plan</th><th>Actif depuis</th><th>Résilié le</th><th>Crédits</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for s in subs %}
+      <tr>
+        <td>{{ s['email'] }}</td>
+        <td><b class="{{ 'pos' if s['status'] == 'active' else 'neg' }}">{{ s['status'] }}</b></td>
+        <td>{{ s['plan'] }}</td>
+        <td class="muted small">{{ (s['started_at'] or '')[:10] }}</td>
+        <td class="muted small">{{ (s['cancelled_at'] or '')[:10] }}</td>
+        <td>{{ s['credits'] if s['credits'] is not none else '—' }}</td>
+        <td>
+          {% if s['status'] != 'active' %}
+          <a class="btn btn-green" style="padding:5px 10px; font-size:12px;" href="/admin?t={{ token }}&action=paid&email={{ s['email'] }}">Marquer payé</a>
+          {% endif %}
+          {% if s['status'] == 'active' %}
+          <a class="btn btn-red" style="padding:5px 10px; font-size:12px;" href="/admin?t={{ token }}&action=cancel&email={{ s['email'] }}">Résilier</a>
+          {% endif %}
+          <a class="btn btn-ghost" style="padding:5px 10px; font-size:12px;" href="/admin?t={{ token }}&action=unlimited&email={{ s['email'] }}">Illimité</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="muted">Aucun abonnement.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h1 style="font-size:26px; margin-top:34px;">Utilisateurs et crédits</h1>
+  <div style="display:flex; gap:16px; flex-wrap:wrap; margin:16px 0;">
+    <form method="get" action="/admin" style="flex:1; min-width:280px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px;">
+      <b class="muted small">➕ Ajouter des crédits à un email</b>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
+        <input type="hidden" name="t" value="{{ token }}">
+        <input type="hidden" name="action" value="add">
+        <input type="email" name="email" placeholder="client@email.fr" required style="flex:2; min-width:180px; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--panel-2); color:var(--text);">
+        <input type="number" name="credits" value="10" min="1" style="width:90px; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--panel-2); color:var(--text);">
+        <button class="btn btn-green" type="submit">Ajouter</button>
+      </div>
+    </form>
+
+    <form method="get" action="/admin" style="flex:1; min-width:280px; background:var(--panel); border:1px solid var(--gold); border-radius:10px; padding:16px;">
+      <b class="muted small" style="color:var(--gold);">♾️ Pass illimité pour un email (mise à jour instantanée)</b>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
+        <input type="hidden" name="t" value="{{ token }}">
+        <input type="hidden" name="action" value="unlimited">
+        <input type="email" name="email" placeholder="personne@email.fr" required style="flex:2; min-width:180px; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--panel-2); color:var(--text);">
+        <button class="btn btn-blue" type="submit">Rendre illimité</button>
+      </div>
+      <div class="muted small" style="margin-top:8px;">Ce pass ne coûte aucun crédit et contourne la limite des 3 analyses. Idéal pour vos comptes de test sur le téléphone.</div>
+    </form>
+  </div>
+  {% if email %}
+  <div style="margin:10px 0 20px;">
+    <a class="btn btn-ghost" href="/admin?t={{ token }}&action=unlimited&email={{ email }}">Me passer en illimité (moi : {{ email }})</a>
+  </div>
+  {% endif %}
+
+  <table class="plan">
+    <thead><tr><th>Email</th><th>Crédits restants</th><th>Inscrit le</th><th></th></tr></thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>{{ u['email'] }}</td>
+        <td><b>{{ u['credits'] }}</b></td>
+        <td class="muted small">{{ u['created_at'] }}</td>
+        <td><a class="btn btn-ghost" style="padding:5px 10px; font-size:12px;" href="/admin?t={{ token }}&action=unlimited&email={{ u['email'] }}">Illimité</a></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="muted">Aucun utilisateur pour l'instant.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h1 style="font-size:26px; margin-top:34px;">Dernières analyses</h1>
+  <table class="plan">
+    <thead><tr><th>Email</th><th>Symbole</th><th>Unité</th><th>Biais</th><th>Le</th></tr></thead>
+    <tbody>
+      {% for a in analyses %}
+      <tr>
+        <td>{{ a['email'] }}</td>
+        <td>{{ a['symbol'] }}</td>
+        <td>{{ a['timeframe'] }}</td>
+        <td>{{ a['bias'] }}</td>
+        <td class="muted small">{{ a['created_at'] }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">Aucune analyse pour l'instant.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h1 style="font-size:26px; margin-top:34px;">Activité récente (temps réel)</h1>
+  <table class="plan" id="live-table">
+    <thead><tr><th>Quand</th><th>IP</th><th>Page</th><th>Événement</th><th>Email</th></tr></thead>
+    <tbody>
+      {% for v in recent_visits %}
+      <tr>
+        <td class="muted small">{{ v['ts'] }}</td>
+        <td class="muted small">{{ v['ip'] }}</td>
+        <td>{{ v['page'] }}</td>
+        <td>{{ v['event'] }}</td>
+        <td class="muted small">{{ v['email'] }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">Aucune activité.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <script>
+    const TOKEN = {{ token|tojson }};
+    const esc = s => { const d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; };
+    async function refreshStats() {
+      try {
+        const r = await fetch('/admin-stats?t=' + encodeURIComponent(TOKEN));
+        if (!r.ok) return;
+        const d = await r.json();
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+        set('st-total', d.total_visits); set('st-unique', d.unique_visitors);
+        set('st-emails', d.nb_emails); set('st-users', d.nb_users);
+        set('st-analyses', d.nb_analyses); set('st-upgrades', d.nb_upgrade_views);
+        set('st-subs', d.active_subs);
+        const tb = document.getElementById('live-table');
+        if (tb) {
+          const rows = (d.last_visits || []).map(v =>
+            '<tr><td class="muted small">' + esc(v.ts) + '</td><td class="muted small">' + esc(v.ip) +
+            '</td><td>' + esc(v.page) + '</td><td>' + esc(v.event) + '</td><td class="muted small">' + esc(v.email) + '</td></tr>'
+          ).join('');
+          const tbody = tb.querySelector('tbody');
+          if (tbody) tbody.innerHTML = rows || '<tr><td colspan="5" class="muted">Aucune activité.</td></tr>';
+        }
+      } catch (e) {}
+    }
+    setInterval(refreshStats, 5000);
+  </script>
+<script src="{{ url_for('static', filename='app.js') + '?v=20260913e' }}"></script>
+</div>
+</body>
+</html>

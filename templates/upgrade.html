@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Abonnement — TradeScope</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') + '?v=20260913e' }}">
+</head>
+<body>
+<div class="brand-bg" aria-hidden="true"></div>
+<header class="site">
+  <div class="container">
+    <a class="brand" href="/"><span class="mark">⇉</span> TradeScope</a>
+    <nav>
+      <a href="/">Analyser</a>
+      <a href="/account">Mon compte</a>
+    </nav>
+  </div>
+</header>
+
+<div class="container" style="padding-top:40px;">
+  <h1 style="font-size:30px; margin:0 0 6px;">Abonnement TradeScope</h1>
+  <p class="muted">3 analyses offertes par email pour essayer. Ensuite, un abonnement léger pour analyser sans limite.</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}
+  {% endwith %}
+
+  {% if sub and sub['status'] == 'active' %}
+  <div class="panel" style="max-width:520px; margin:20px auto; text-align:center;">
+    <div class="muted small" style="text-transform:uppercase; letter-spacing:.5px;">Votre abonnement</div>
+    <div style="font-size:30px; font-weight:800; color:var(--green); margin:10px 0;">Actif ✅</div>
+    <p class="muted small">Plan {{ sub['plan'] }} · Actif depuis {{ sub['started_at'][:10] }}</p>
+    <a class="btn btn-blue" href="/" style="width:100%;">Analyser sans limite</a>
+    <div style="margin-top:14px;">
+      <a class="muted small" href="/account">Gérer / résilier mon abonnement</a>
+    </div>
+  </div>
+  {% else %}
+  <div class="panel" style="max-width:520px; margin:20px auto; text-align:center;">
+    <div class="muted small" style="text-transform:uppercase; letter-spacing:.5px;">Plan</div>
+    <div style="font-size:40px; font-weight:800; color:var(--green); margin:8px 0;">{{ price }} <span style="font-size:15px; color:var(--muted);">/ mois</span></div>
+    <ul style="list-style:none; padding:0; margin:14px 0 20px; text-align:left;">
+      <li style="padding:7px 0; font-size:14.5px;">✓ Analyses de screenshots illimitées</li>
+      <li style="padding:7px 0; font-size:14.5px;">✓ Tous les marchés (crypto, or, forex, indices)</li>
+      <li style="padding:7px 0; font-size:14.5px;">✓ Les 7 unités de temps (M1 → H4) d'un coup</li>
+      <li style="padding:7px 0; font-size:14.5px;">✓ Position au marché + ordre limite, à chaque analyse</li>
+      <li style="padding:7px 0; font-size:14.5px;">✓ Plan complet : entrée, SL, TP1/TP2/TP3 + raisonnement</li>
+    </ul>
+    {% if pay_link or btc_enabled %}
+      {% if pay_link %}<a class="btn btn-blue" href="{{ pay_link }}" style="width:100%;">Payer par carte bancaire 💳</a>{% endif %}
+      {% if btc_enabled %}
+      <form method="post" action="/pay/btc" style="margin-top:10px;">
+        <button class="btn" type="submit" style="width:100%; background:var(--panel-2); border:1px solid var(--line);">Payer en Bitcoin ₿ (wallet)</button>
+      </form>
+      {% endif %}
+      <p class="muted small" style="margin-top:10px;">Paiement sécurisé. Abonnement activé automatiquement dès réception du paiement. Résiliation à tout moment depuis « Mon compte ».</p>
+    {% else %}
+      <div class="alert success">Les paiements en ligne seront activés sous peu. En attendant, contactez l'équipe pour activer votre compte.</div>
+      <p class="muted small">Votre email : <b>{{ email or 'non renseigné' }}</b></p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if email and sub and sub['status'] == 'cancelled' %}
+  <div class="panel" style="max-width:520px; margin:20px auto; text-align:center;">
+    <p class="muted small">Abonnement résilié le {{ sub['cancelled_at'][:10] }}. Pour réactiver, resouscrivez ci-dessus.</p>
+  </div>
+  {% endif %}
+
+  <div class="disclaimer">
+    L'abonnement donne accès à l'outil d'analyse. Il ne constitue ni un conseil en investissement ni une promesse de gains. Tout investissement comporte un risque, y compris de perte totale. Vérifiez votre situation et consultez un conseiller agréé.
+  </div>
+</div>
+<script src="{{ url_for('static', filename='app.js') + '?v=20260913e' }}"></script>
+</body>
+</html>

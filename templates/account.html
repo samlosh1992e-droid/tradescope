@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon compte — TradeScope</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') + '?v=20260913e' }}">
+</head>
+<body>
+<div class="brand-bg" aria-hidden="true"></div>
+<header class="site">
+  <div class="container">
+    <a class="brand" href="/"><span class="mark">⇉</span> TradeScope</a>
+    <nav>
+      <a href="/">Analyser</a>
+      <a href="/upgrade">Abonnement</a>
+    </nav>
+  </div>
+</header>
+
+<div class="container" style="padding-top:40px;">
+  <h1 style="font-size:28px; margin:0 0 4px;">Mon compte</h1>
+  <p class="muted">Email : <b>{{ email }}</b></p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}
+  {% endwith %}
+
+  <div class="panel" style="max-width:520px; margin:20px auto;">
+    {% if unlimited %}
+      <p><b>Pass illimité</b> — analyses en illimité.</p>
+    {% else %}
+      <p>Analyses gratuites restantes : <b>{{ credits }}</b></p>
+    {% endif %}
+
+    {% if sub and sub['status'] == 'active' %}
+    <div class="alert success" style="margin:14px 0;">
+      <b>Abonnement actif</b> — plan {{ sub['plan'] }}, depuis {{ sub['started_at'][:10] }}.
+    </div>
+    <p class="muted small">Gérez votre abonnement à tout moment. En le résiliant, l'accès illimité s'arrête <b>immédiatement</b>.</p>
+    <form method="post" action="/account/cancel" onsubmit="return confirm('Résilier votre abonnement TradeScope ? L\'accès illimité sera coupé immédiatement.')">
+      <button class="btn btn-red" type="submit" style="width:100%;">Résilier mon abonnement</button>
+    </form>
+    {% elif sub and sub['status'] == 'cancelled' %}
+    <div class="alert" style="margin:14px 0;">
+      <b>Abonnement résilié</b> le {{ sub['cancelled_at'][:10] }}. L'accès illimité est arrêté.
+    </div>
+    <a class="btn btn-blue" href="/upgrade" style="width:100%;">Réactiver mon abonnement</a>
+    {% else %}
+    <div class="alert" style="margin:14px 0;">
+      Aucun abonnement actif.
+    </div>
+    <a class="btn btn-blue" href="/upgrade" style="width:100%;">S'abonner</a>
+    {% endif %}
+  </div>
+</div>
+<script src="{{ url_for('static', filename='app.js') + '?v=20260913e' }}"></script>
+</body>
+</html>

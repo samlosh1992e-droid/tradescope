@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analyse de votre image — TradeScope</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') + '?v=20260913e' }}">
+<style>
+  .vision-hero { border-radius: 12px; padding: 18px; margin-bottom: 16px; border: 1px solid var(--line); }
+  .vision-hero.pos { border-color: rgba(34,197,139,.6); background: rgba(34,197,139,.08); }
+  .vision-hero.neg { border-color: rgba(255,82,82,.6); background: rgba(255,82,82,.08); }
+  .vision-hero.neutre { border-color: rgba(244,185,66,.5); background: rgba(244,185,66,.07); }
+  .vision-hero .big { font-size: 26px; font-weight: 800; letter-spacing: .3px; }
+  .vision-hero.pos .big { color: var(--green); }
+  .vision-hero.neg .big { color: #ff8f8f; }
+  .vision-hero.neutre .big { color: var(--gold); }
+  .chips { margin-top: 12px; }
+  .chip { display: inline-block; padding: 4px 12px; border-radius: 16px; font-size: 12px; font-weight: 700; margin: 0 6px 6px 0; border: 1px solid var(--line); background: var(--panel-2); }
+</style>
+</head>
+<body>
+<div class="brand-bg" aria-hidden="true"></div>
+<header class="site">
+  <div class="container">
+    <a class="brand" href="/"><span class="mark">⇉</span> TradeScope</a>
+    <nav>
+      <a href="/">Nouvelle analyse</a>
+      <a href="/account">Mon compte</a>
+      <a href="/upgrade">Abonnement</a>
+    </nav>
+  </div>
+</header>
+
+<div class="container" style="padding-top:30px;">
+
+  <div class="vision-hero {{ 'pos' if plan else ('neg' if vision.bias and vision.bias != 'neutre' else 'neutre') }} animate-pop">
+    <div class="muted small" style="letter-spacing:.5px; text-transform:uppercase;">Analyse de votre image · {{ symbol }}</div>
+    <div class="big" style="margin-top:6px;">
+      {% if plan %}
+        ✔ Position jouable — {{ plan.bias_label }}
+      {% elif vision.bias == 'neutre' %}
+        Aucune direction claire sur l'image
+      {% elif vision.bias %}
+        Image séduisante mais signaux insuffisants
+      {% else %}
+        Image illisible
+      {% endif %}
+    </div>
+    <div class="muted small" style="margin-top:6px;">
+      Moteur : <b>{{ 'VISION IA' if vision.method == 'ai' else 'VISION LOCALE' }}</b> ·
+      Force du signal <b>{{ vision.confidence }} %</b> ·
+      {{ vision.up }} haussières / {{ vision.down }} baissières ({{ vision.bars }} bougies)
+    </div>
+    <div class="chips">
+      {% if vision.timeframe %}<span class="chip">⏱ {{ vision.timeframe }}</span>{% endif %}
+      {% if vision.symbol %}<span class="chip">💰 {{ vision.symbol }}</span>{% endif %}
+      {% if vision.last_price %}<span class="chip">Prix lu : {{ '%.5f'|format(vision.last_price) }}</span>{% endif %}
+      {% if vision.recent %}<span class="chip">Momentum : {{ vision.recent }}</span>{% endif %}
+    </div>
+  </div>
+
+  {% if plan %}
+  <div class="panel trade-card animate-up">
+    <div class="trade-head">
+      <h2 style="margin:0">🎯 Position proposée</h2>
+      <span class="key-tag">SELON VOTRE SCREENSHOT · {{ TIMEFRAMES[tf_key].label }}</span>
+    </div>
+    {% if plan.from_image %}
+    <div class="live-price">Entrée calculée <b>100% depuis votre image</b> : <span class="val pos">{{ plan.direct.entry|fmt }}</span> <span class="muted small">({{ plan.image_axis }})</span></div>
+    {% if plan.axis_min is not none %}
+    <p class="muted small" style="margin-top:6px;">Graduation luc sur l'image : <b>{{ plan.axis_min|fmt }}</b> → <b>{{ plan.axis_max|fmt }}</b> (pas ~{{ plan.axis_step|fmt }}). {% if plan.snapped %}L'entrée a été calée sur la graduation la plus proche.{% endif %}</p>
+    {% endif %}
+    {% if plan.live_ref %}<p class="muted small" style="margin-top:4px;">Cours actuel approximatif ({{ plan.symbol }}) : <b>{{ plan.live_ref|fmt }}</b> — l'écart avec l'entrée photo vient de l'âge de la capture. Prenez un screenshot <b>à jour</b> pour un prix exact.</p>{% endif %}
+    {% else %}
+      {% if live_price %}
+      <div class="live-price">Prix actuel du marché <b>{{ symbol }}</b> : <span class="val pos">{{ live_price|fmt }}</span></div>
+      {% endif %}
+    {% endif %}
+    <table class="plan">
+      <tr><th>Entrée au marché</th><td class="val {{ 'pos' if plan.bias == 'long' else 'neg' }}">{{ plan.direct.entry|fmt }}</td></tr>
+      <tr><th>Stop loss (SL)</th><td class="val neg">{{ plan.direct.sl|fmt }}</td></tr>
+      <tr><th>Objectif TP1 (1R)</th><td class="val pos">{{ plan.direct.tp1|fmt }}</td></tr>
+      <tr><th>Objectif TP2 (2R)</th><td class="val pos">{{ plan.direct.tp2|fmt }}</td></tr>
+      <tr><th>Objectif TP3 (3R)</th><td class="val pos">{{ plan.direct.tp3|fmt }}</td></tr>
+      <tr><th>Ratio gain / risque</th><td class="val">{{ plan.rr }} : 1</td></tr>
+    </table>
+    <p class="muted small" style="margin-top:10px;">Position issue du biais détecté sur <b>votre image</b> ({{ plan.confidence }} % de force visuelle) ; <b>entrée, SL et TP calculés uniquement à partir de la graduation de votre screenshot</b> ({{ plan.image_axis }}). TP1 touché → remontez le SL au point d'entrée. Ne risquez jamais plus de 1 à 2 % de votre compte.</p>
+  </div>
+  {% else %}
+  <div class="panel pending-card animate-up">
+    <div class="trade-head">
+      <h2 style="margin:0">🙈 Pas de position selon cette image</h2>
+      <span class="key-tag key-safe">PRUDENCE</span>
+    </div>
+    {% if vision.guard %}
+    <p class="muted small">⚠️ Le prix lu sur l'image (<b>{{ vision.guard.entry|fmt }}</b>) est à <b>{{ vision.guard.diff_pct }} %</b> du cours actuel (<b>{{ vision.guard.live|fmt }}</b>) : votre screenshot est <b>trop ancien</b> ou l'échelle est mal lue. Une entrée à partir de cette image serait impossible à exécuter. Prenez une capture <b>à l'instant</b> puis relancez.</p>
+    {% elif vision.bias == 'neutre' %}
+    <p class="muted small">Le screenshot ne montre <b>aucune direction claire</b> (trop de range, pas assez de bougies nettes). Entrer maintenant = pile ou face. Re-tentez avec une autre unité de temps ou relancez plus tard.</p>
+    {% elif vision.bias %}
+    <p class="muted small">L'image tend vers {{ 'ACHAT' if vision.bias == 'long' else 'VENTE' }}, mais <b>la graduation des prix n'a pas pu être lue</b> ou le signal est trop faible pour proposer une entrée fiable. Pour chiffrer SL/TP il faut que l'axe des prix de ton graphique soit net et visible sur la capture.</p>
+    {% else %}
+    <p class="muted small">Cette image n'a pas pu être interprétée (capture floue, trop sombre, pas de bougies détectées). Envoyez un screenshot net de votre graphique.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if vision.notes %}
+  <div class="panel animate-up" style="animation-delay:.1s">
+    <h2>Ce que l'image dit</h2>
+    {% for note in vision.notes %}<p class="muted small" style="margin:5px 0;">· {{ note }}</p>{% endfor %}
+    {% if vision.supports or vision.resistances %}
+    <p class="muted small" style="margin-top:10px;">
+      {% if vision.supports %}<span class="tag tag-green">{{ vision.supports|length }} zone(s) de support visuelle(s)</span>{% endif %}
+      {% if vision.resistances %}<span class="tag tag-red">{{ vision.resistances|length }} zone(s) de résistance visuelle(s)</span>{% endif %}
+    </p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="panel animate-up" style="text-align:center; animation-delay:.15s;">
+    {% if unlimited %}
+      <p>Pass <b>illimité</b> actif. Bonne analyse.</p>
+      <a class="btn btn-green" href="/">Analyser une autre image</a>
+    {% elif remaining and remaining > 0 %}
+      <p>Il vous reste <b>{{ remaining }}</b> analyse(s) gratuite(s).</p>
+      <a class="btn btn-green" href="/">Analyser une autre image</a>
+    {% else %}
+      <h2 style="margin-bottom:8px;">3 analyses gratuites utilisées</h2>
+      <p class="muted">Passez au plan Abonnement pour continuer.</p>
+      <a class="btn btn-blue" href="/upgrade">Voir l'abonnement</a>
+    {% endif %}
+  </div>
+
+  <div class="disclaimer animate-up">
+    <b>Avertissement :</b> analyse générée automatiquement par TradeScope à partir de votre capture et de données de marché publiques. Outil d'éducation, sans valeur de conseil en investissement. Le trading comporte un risque élevé de perte : n'engagez que des fonds dont vous pouvez accepter la perte.
+  </div>
+
+</div>
+
+<footer class="site">
+  <div class="container">
+    <span>© 2026 TradeScope — Outil d'analyse, pas un conseil en investissement.</span>
+    <span><a href="/" style="color:inherit">Nouvelle analyse</a></span>
+  </div>
+</footer>
+<script src="{{ url_for('static', filename='app.js') + '?v=20260913e' }}"></script>
+</body>
+</html>

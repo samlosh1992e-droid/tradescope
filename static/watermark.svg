@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="460" viewBox="0 0 1260 460">
+  <defs>
+    <linearGradient id="wh" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e8eef7"/>
+      <stop offset="0.5" stop-color="#3aa7ff"/>
+      <stop offset="1" stop-color="#e8eef7"/>
+    </linearGradient>
+    <linearGradient id="mg" x1="0" y1="0" x2="1260" y2="460" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#22c58b"/>
+      <stop offset="1" stop-color="#3aa7ff"/>
+    </linearGradient>
+  </defs>
+
+  <g opacity="0.55">
+    <path d="M70 392 Q 360 96 660 236 T 1210 108" stroke="#22c58b" stroke-width="2" fill="none" opacity="0.5" stroke-linecap="round" stroke-dasharray="2 14"/>
+    <path d="M64 416 Q 380 130 700 268 T 1224 150" stroke="#3aa7ff" stroke-width="2" fill="none" opacity="0.45" stroke-linecap="round" stroke-dasharray="2 14"/>
+  </g>
+
+  <g opacity="0.6">
+    <rect x="4" y="4" width="196" height="196" rx="52" fill="url(#mg)"/>
+    <g stroke="#ffffff" stroke-width="9" stroke-linecap="round" opacity=".8">
+      <line x1="68" y1="18" x2="68" y2="62"/>
+      <line x1="132" y1="136" x2="132" y2="182"/>
+    </g>
+    <g fill="#ffffff">
+      <rect x="42" y="50" width="52" height="44" rx="9"/>
+      <rect x="104" y="102" width="52" height="44" rx="9"/>
+    </g>
+    <path d="M60 136 l14 14 14-14 M102 58 l14-14 14 14" stroke="#ffffff" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity=".9"/>
+  </g>
+
+  <text x="248" y="150" font-family="Segoe UI, Arial, sans-serif" font-size="118" font-weight="800" letter-spacing="-2" fill="url(#wh)" opacity="0.92">TradeScope</text>
+  <line x1="254" y1="196" x2="996" y2="196" stroke="#3aa7ff" stroke-width="2" opacity="0.5"/>
+  <text x="254" y="252" font-family="Segoe UI, Arial, sans-serif" font-size="34" font-weight="700" letter-spacing="10" fill="#8fa3bd" opacity="0.85">ANALYSE TECHNIQUE · OR · CRYPTO · FOREX</text>
+</svg>

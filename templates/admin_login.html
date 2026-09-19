@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connexion — TradeScope</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') + '?v=20260913e' }}">
+</head>
+<body>
+<div class="brand-bg" aria-hidden="true"></div>
+<div class="container" style="padding:80px 20px; max-width:420px;">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}
+  {% endwith %}
+  <h1 style="color:#fff;">Connexion pro</h1>
+  <form method="post" action="/admin">
+    <div class="field"><label>Code secret</label><input type="password" name="t"></div>
+    <button class="btn btn-green" type="submit" style="width:100%;">Accéder</button>
+  </form>
+</div>
+</body>
+</html>

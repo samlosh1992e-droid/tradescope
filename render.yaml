@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: tradescope
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ADMIN_TOKEN
+        value: tradescope2026
+      - key: FREE_CREDITS
+        value: "3"
+      - key: PRICE
+        value: "4 900 XPF/mois"
+      - key: PRICE_XPF
+        value: "4900"
+      - key: BTC_ADDRESS
+        value: ""
+      - key: BTC_MIN_CONF
+        value: "1"
+      - key: VISION_API_KEY
+        value: ""
+      - key: VISION_API_URL
+        value: "https://api.openai.com/v1/chat/completions"
+      - key: VISION_MODEL
+        value: "gpt-4o-mini"
+      - key: ADMIN_EMAILS
+        value: ""
+      - key: MAIL_TO_ADMIN
+        value: ""

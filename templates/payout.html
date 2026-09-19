@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Paiement Bitcoin — TradeScope</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') + '?v=20260913e' }}">
+</head>
+<body>
+<div class="brand-bg" aria-hidden="true"></div>
+<header class="site">
+  <div class="container">
+    <a class="brand" href="/"><span class="mark">⇉</span> TradeScope</a>
+    <nav>
+      <a href="/">Analyser</a>
+      <a href="/account">Mon compte</a>
+    </nav>
+  </div>
+</header>
+
+<div class="container" style="padding-top:40px;">
+  <h1 style="font-size:28px; margin:0 0 6px;">Paiement en Bitcoin</h1>
+  <p class="muted">Abonnement <b>1 mois</b> · {{ price }} · résiliable à tout moment.</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}
+  {% endwith %}
+
+  <div class="grid-2" style="max-width:760px; margin:20px auto;">
+    <div class="panel" style="text-align:center;">
+      <p class="muted small" style="text-transform:uppercase; letter-spacing:.5px;">1. Envoyez le montant exact</p>
+      <div style="margin:14px 0;">
+        <input type="button" onclick="navigator.clipboard.writeText('{{ bip21 }}')" value="⌘ Copier"
+               style="cursor:pointer; margin-bottom:10px; padding:8px 16px; border-radius:10px; border:1px solid var(--line); background:var(--panel-2); font-weight:700;">
+        <div class="muted small" style="word-break:break-all; font-size:13px;" id="addr">{{ bip21 }}</div>
+      </div>
+      {% if qr %}<div style="margin:10px auto;"><img src="{{ qr }}" alt="QR de paiement"
+        style="width:220px; height:220px; border-radius:12px; border:1px solid var(--line);"></div>{% endif %}
+      <div style="font-size:20px; font-weight:800; color:var(--gold, #f0b90b); margin-top:10px;">
+        {{ '%.8f'|format(amount_btc) }} BTC
+      </div>
+      <p class="muted small">≈ {{ price }} (montant vérifié automatiquement sur la blockchain)</p>
+    </div>
+
+    <div class="panel">
+      <p class="muted small" style="text-transform:uppercase; letter-spacing:.5px;">2. Paiement & activation</p>
+      <ul style="list-style:none; padding:0; margin:12px 0;">
+        <li style="padding:6px 0; font-size:14px;">✓ Ouvrez votre wallet Bitcoin</li>
+        <li style="padding:6px 0; font-size:14px;">✓ Scannez le QR ou copiez l'adresse</li>
+        <li style="padding:6px 0; font-size:14px;">✓ Envoyez le <b>montant exact</b> ci-dessus</li>
+        <li style="padding:6px 0; font-size:14px;">✓ L'abonnement s'active <b>automatiquement</b> à la confirmation du réseau</li>
+      </ul>
+      <div id="status_box" class="alert" style="margin-top:10px;">
+        ⏳ En attente de paiement…
+      </div>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    Le paiement est vérifié directement sur la blockchain Bitcoin (aucune carte). Une fois reçu et confirmé, votre abonnement est activé automatiquement et apparaît dans « Mon compte ». Rien n'est débité automatiquement ensuite : l'abonnement est <b>mensuel manuel</b>, vous re-payez chaque mois si vous voulez continuer, et vous pouvez résilier à tout moment.
+  </div>
+</div>
+
+<script>
+(function poll(){
+  fetch('/pay/btc/status/{{ pay.id }}')
+    .then(r => r.json())
+    .then(d => {
+      const box = document.getElementById('status_box');
+      if (d.status === 'paid') {
+        box.className = 'alert success';
+        box.innerHTML = '✅ <b>Paiement reçu et confirmé !</b> Votre abonnement est actif. <a href="/account">Voir mon compte</a>';
+        clearInterval(timer);
+      } else if (d.status === 'cancelled') {
+        box.className = 'alert';
+        box.innerHTML = 'Cette commande a été annulée.';
+        clearInterval(timer);
+      }
+    }).catch(()=>{});
+})();
+const timer = setInterval(() => {
+  fetch('/pay/btc/status/{{ pay.id }}')
+    .then(r => r.json())
+    .then(d => {
+      const box = document.getElementById('status_box');
+      if (d.status === 'paid') {
+        box.className = 'alert success';
+        box.innerHTML = '✅ <b>Paiement reçu et confirmé !</b> Votre abonnement est actif. <a href="/account">Voir mon compte</a>';
+        clearInterval(timer);
+      }
+    }).catch(()=>{});
+}, 8000);
+</script>
+<script src="{{ url_for('static', filename='app.js') + '?v=20260913e' }}"></script>
+</body>
+</html>

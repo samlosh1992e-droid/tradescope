@@ -1,0 +1,336 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TradeScope — Votre screenshot, analyses & plan d'action</title>
+<meta name="description" content="Envoyez un screenshot de votre graphique (BTC, or, forex…) et recevez une analyse technique avec entrée, stop loss et TP1/TP2/TP3. 3 analyses gratuites.">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') + '?v=20260913e' }}">
+</head>
+<body>
+<div class="brand-bg" aria-hidden="true"></div>
+<canvas id="bg-candles"></canvas>
+<div class="ticker">
+  <div class="ticker-track" id="ticker-track">
+    <span class="ticker-empty">Chargement des prix…</span>
+  </div>
+</div>
+
+<header class="site">
+  <div class="container">
+    <a class="brand" href="/"><span class="mark">⇉</span> TradeScope</a>
+    <nav>
+      {% if email %}<a href="#" class="credits-pill" style="margin-left:0">{% if unlimited %}Pass illimité{% else %}Analyses restantes : {{ credits }}{% endif %}</a>{% endif %}
+      <a href="/account">Mon compte</a>
+      <a href="/upgrade">Abonnement</a>
+    </nav>
+  </div>
+</header>
+
+<div class="an-overlay" id="an-overlay">
+  <div class="an-card">
+    <div class="radar"><div class="radar-sweep"></div><div class="radar-center"></div></div>
+    <h2>Analyse en cours…</h2>
+    <p class="muted" id="an-step">Récupération des données de marché</p>
+    <div class="an-bar"><div class="an-fill" id="an-fill"></div></div>
+  </div>
+</div>
+
+<section class="hero">
+  <div class="container">
+    <div class="badge">Coté sur 2000+ marchés · BTC, Or, Forex, Indices</div>
+    <h1>Envoyez un screenshot.<br>Recevez un <span>plan d'action</span>.</h1>
+    <p>Vous regardez un graphique sur TradingView, une banque ou une app ? Capturez-le, envoyez-le ici : l'IA analyse vos EMA, RSI et la volatilité, puis vous donne l'entrée, le stop loss et les objectifs TP1 / TP2 / TP3 — avec le « pourquoi ».</p>
+    {% if email and ((credits is not none and credits > 0) or unlimited) %}
+      <span class="credits-pill">{% if unlimited %}Pass illimité{% else %}Analyses restantes : {{ credits }}{% endif %}</span>
+    {% endif %}
+  </div>
+</section>
+
+<div class="container">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert {{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {% if not email %}
+  <div class="panel" id="start">
+    <h2>Étape 1 · Votre email pour activer les 3 analyses gratuites</h2>
+    <p class="muted small">Aucune carte bancaire. Vous recevez 3 analyses offertes, puis le plan Abonnement reprend la main.</p>
+    <form method="post" action="/set-email">
+      <div class="field"><input type="email" name="email" placeholder="votre@email.fr" required style="max-width:340px;"></div>
+      <button class="btn btn-green" type="submit">Activer mes 3 analyses gratuites</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if email and ((credits is not none and credits > 0) or unlimited) %}
+  <div class="panel" id="start">
+    <h2>Étape 2 · Choisissez votre type d'analyse</h2>
+    <p class="muted small">Deux moteurs séparés : l'analyse du <b>marché réel</b> (données actuelles) ou l'analyse de <b>votre image</b> (lecture du screenshot).</p>
+    <form method="post" action="/analyser" enctype="multipart/form-data" id="form-analyser">
+      <div class="grid-2" style="gap:14px; margin-bottom:14px;">
+        <label class="mode-card" id="mc-market">
+          <input type="radio" name="mode" value="market" checked>
+          <b>📊 Analyse du marché réel</b>
+          <span class="muted small">Données actuelles du symbole sur 7 unités de temps.</span>
+        </label>
+        <label class="mode-card" id="mc-image">
+          <input type="radio" name="mode" value="image">
+          <b>🖼 Analyse de mon image</b>
+          <span class="muted small">Le site lit vraiment le screenshot et dit si une position est jouable.</span>
+        </label>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label>Marché</label>
+          <select name="symbol">
+            {% for code, label in symbols %}
+            <option value="{{ code }}" {% if code == 'XAU-USD' %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label id="label-tf">Unité de temps</label>
+          <select name="timeframe" id="select-tf">
+            <option value="Tous" selected>Toutes (M1 → H4)</option>
+            <option value="1m">M1</option>
+            <option value="5m">M5</option>
+            <option value="15m">M15</option>
+            <option value="30m">M30</option>
+            <option value="1h">H1</option>
+            <option value="2h">H2</option>
+            <option value="4h">H4</option>
+          </select>
+        </div>
+      </div>
+      <div class="field" id="field-screen">
+        <label>Screenshot du graphique</label>
+        <div class="upload-zone" id="zone">
+          <div id="zonetext">Envoyez le screenshot de votre plateforme : TradeScope lit les bougies et la tendance.</div>
+          <input type="file" name="screenshot" id="file" accept="image/png,image/jpeg,image/webp" style="display:none;">
+        </div>
+      </div>
+      <p class="muted small" id="hint-market" style="margin-top:-4px;">Sans image : analyse du marché sélectionné sur toutes les unités.</p>
+      <button class="btn btn-green" type="submit" style="width:100%;">Analyser</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if email and credits is not none and credits <= 0 and not unlimited %}
+  <div class="panel" style="text-align:center;">
+    <h2>Mes 3 analyses gratuites sont utilisées</h2>
+    <p class="muted">Pour continuer à analyser vos screenshots, passez au plan Abonnement.</p>
+    <a class="btn btn-blue" href="/upgrade">Voir l'abonnement</a>
+  </div>
+  {% endif %}
+
+  <div class="panel">
+    <h2>Comment ça marche</h2>
+    <p class="muted small">1. Vous capturez l'écran de n'importe quel graphique (BTC/USD, EUR/USD, Gold…). 2. Vous l'envoyez avec le marché choisi. 3. TradeScope SPÉCIFIE UNE ANALYSE RÉELLE DE L'IMAGE : il lit les bougies, les couleurs, la tendance et la structure de votre screenshot (en local et gratuitement, ou via un modèle de vision si une clé est configurée), puis croise ce verdict avec les données réelles du symbole sur <b>7 unités de temps (M1, M5, M15, M30, H1, H2, H4)</b> et les indicateurs EMA 9/21/50, RSI(14), MACD(12,26,9), Stochastique(14,3) et ATR(14). 4. Il vous dit si une position est VRAIMENT jouable : soit l'image confirme l'analyse, soit il signale un écart entre votre screenshot et le marché actuel (prudence). 5. Vous affichez au besoin l'entrée, le stop loss TP1/TP2/TP3 et le raisonnement complet.</p>
+  </div>
+
+  <div class="disclaimer">
+    <b>Avertissement important.</b> TradeScope est un outil d'analyse technique et d'éducation. Il ne fournit PAS de conseil en investissement au sens des réglementations financières (notamment AMF/ESMA). Les niveaux sont indicatifs : le trading de devises, crypto-actifs, or et CFDs comporte un risque élevé de perte, pouvant dépasser votre dépôt. 70-80 % des comptes de particuliers peuvent perdre de l'argent. Ne tradez pas avec de l'argent dont vous avez besoin, n'empruntez jamais pour trader, et consultez un professionnel agréé avant toute décision.
+  </div>
+</div>
+
+<footer class="site">
+  <div class="container">
+    <span>© 2026 TradeScope — Outil d'analyse, pas un conseil en investissement.</span>
+    <span><a href="/upgrade" style="color:inherit">Abonnement</a> · <a href="/admin" style="color:inherit">Espace pro</a></span>
+  </div>
+</footer>
+
+<script>
+  const zone = document.getElementById('zone');
+
+  // ---- Mode d'analyse : marche reel vs image ----
+  const mcMarket = document.getElementById('mc-market');
+  const mcImage = document.getElementById('mc-image');
+  const fieldScreen = document.getElementById('field-screen');
+  const hintMarket = document.getElementById('hint-market');
+  const selectTf = document.getElementById('select-tf');
+  const labelTf = document.getElementById('label-tf');
+  function applyMode() {
+    const checked = document.querySelector('input[name="mode"]:checked');
+    const isImage = checked && checked.value === 'image';
+    if (isImage) {
+      mcMarket.classList.remove('mode-on');
+      mcImage.classList.add('mode-on');
+      fieldScreen.style.display = 'block';
+      hintMarket.style.display = 'none';
+      labelTf.textContent = 'Unité de temps (pour positionner vos niveaux)';
+      selectTf.value = selectTf.value === 'Tous' ? '5m' : selectTf.value;
+    } else {
+      mcImage.classList.remove('mode-on');
+      mcMarket.classList.add('mode-on');
+      fieldScreen.style.display = 'none';
+      hintMarket.style.display = 'block';
+      labelTf.textContent = 'Unité de temps';
+      selectTf.value = 'Tous';
+    }
+  }
+  document.querySelectorAll('input[name="mode"]').forEach(r => {
+    r.addEventListener('change', applyMode);
+  });
+  applyMode();
+
+  // ---- Fond animé : bougies glissantes ----
+  const bgC = document.getElementById('bg-candles');
+  const BGW = () => window.innerWidth, BGH = () => window.innerHeight;
+  bgC.width = BGW(); bgC.height = BGH();
+  window.addEventListener('resize', () => { bgC.width = BGW(); bgC.height = BGH(); initCandles(); });
+  let candles = [];
+  function initCandles() {
+    const n = 46; candles = [];
+    for (let i = 0; i < n; i++) candles.push({
+      x: Math.random() * BGW(),
+      y: Math.random() * BGH(),
+      o: 60 + Math.random() * 40,
+      c: 40 + Math.random() * 70,
+      w: 4 + Math.random() * 6,
+      v: 0.35 + Math.random() * 0.9,
+      up: Math.random() > 0.42,
+      seed: Math.random() * 6.28
+    });
+  }
+  initCandles();
+  function drawCandles() {
+    const ctx = bgC.getContext('2d');
+    ctx.clearRect(0, 0, BGW(), BGH());
+    const t = Date.now() / 1000;
+    for (let i = 0; i < candles.length; i++) {
+      const cd = candles[i];
+      cd.y -= cd.v * 0.6;
+      if (Math.random() < 0.03) cd.up = !cd.up;
+      if (cd.y < -80) { cd.y = BGH() + 80; cd.x = Math.random() * BGW(); }
+      const o = cd.o, cc = cd.up ? Math.max(20, o - 26) : Math.min(126, o + 26);
+      const col = cd.up ? '#22c58b' : '#ff5d5d';
+      const hh = Math.abs(cc - o);
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(cd.x, cd.y - hh * 1.25);
+      ctx.lineTo(cd.x, cd.y + hh * 1.25);
+      ctx.stroke();
+      ctx.fillStyle = col;
+      const top = Math.min(o, cc);
+      ctx.fillRect(cd.x - cd.w / 2, cd.y - top, cd.w, hh);
+      ctx.globalAlpha = 1;
+    }
+    requestAnimationFrame(drawCandles);
+  }
+  drawCandles();
+
+  const file = document.getElementById('file');
+  const zoneText = document.getElementById('zonetext');
+  zone.addEventListener('click', () => file.click());
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag');
+    if (e.dataTransfer.files.length) {
+      file.files = e.dataTransfer.files;
+      zoneText.textContent = 'Fichier choisi : ' + e.dataTransfer.files[0].name;
+    }
+  });
+  file.addEventListener('change', () => {
+    if (file.files.length) {
+      zoneText.textContent = 'Fichier choisi : ' + file.files[0].name;
+      // choisir le mode image automatiquement des qu'un screenshot est depose
+      const imgRadio = document.querySelector('input[name="mode"][value="image"]');
+      if (!imgRadio.checked) { imgRadio.checked = true; applyMode(); }
+    }
+  });
+
+  // ---- Ticker de prix en direct ----
+  async function loadTicker() {
+    try {
+      const r = await fetch('/api/quotes', { headers: { 'Accept': 'application/json' } });
+      const quotes = await r.json();
+      if (!quotes.length) return;
+      const item = q => {
+        const cls = q.chg >= 0 ? 'up' : 'down';
+        const arrow = q.chg >= 0 ? '▲' : '▼';
+        return `<span class="tq"><b>${q.symbol}</b> ${fmt(q.price)} <i class="${cls}">${arrow} ${Math.abs(q.chg).toFixed(2)}%</i></span>`;
+      };
+      const items = quotes.map(item).join('');
+      const track = document.getElementById('ticker-track');
+      track.innerHTML = items + items; // duplicate for seamless loop
+      track.style.animation = 'none';
+      void track.offsetWidth;
+      track.style.animation = '';
+    } catch (e) { /* keep silent if quotes unavailable */ }
+  }
+  function fmt(p) {
+    return p >= 10000 ? p.toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+         : p >= 100 ? p.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+         : p.toLocaleString('fr-FR', { minimumFractionDigits: 4, maximumFractionDigits: 5 });
+  }
+  loadTicker();
+  setInterval(loadTicker, 45000);
+
+  // ---- Soumission AJAX + overlay d'analyse animé ----
+  const overlay = document.getElementById('an-overlay');
+  const stepEl = document.getElementById('an-step');
+  const fillEl = document.getElementById('an-fill');
+  let steps = [
+    'Récupération des données de marché réelles',
+    'Analyse M1 · M5 · M15 en parallèle',
+    'Analyse M30 · H1 en parallèle',
+    'Analyse H2 · H4 en parallèle',
+    'Calcul EMA 9 / 21 / 50 et RSI(14)',
+    'Mesure du momentum (MACD, Stochastique)',
+    'Analyse de la structure : supports / résistances',
+    'Construction du plan ⚡ marché + 📌 ordre limite'
+  ];
+  const stepsImage = [
+    'Lecture du screenshot : bougies et tendance',
+    'Extraction des couleurs (haussières / baissières)',
+    'OCR : lecture de la graduation des prix',
+    'Mesure de l\'amplitude visuelle des bougies',
+    'Calcul entrée + SL + TP1 / TP2 / TP3',
+    '100 % à partir de votre image, sans données marché'
+  ];
+  function imageModeActive() {
+    const c = document.querySelector('input[name="mode"]:checked');
+    return c && c.value === 'image';
+  }
+  const form = document.getElementById('form-analyser');
+  if (form) {
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const fdata = new FormData(form);
+      const active = imageModeActive() ? stepsImage : steps;
+      overlay.classList.add('show');
+      let i = 0;
+      stepEl.textContent = active[0];
+      const timer = setInterval(() => {
+        i = (i + 1) % active.length;
+        stepEl.textContent = active[i];
+        fillEl.style.width = Math.min(92, 15 + i * (80 / Math.max(1, active.length - 1))) + '%';
+      }, 1200);
+      try {
+        const resp = await fetch('/analyser', { method: 'POST', body: fdata });
+        const html = await resp.text();
+        clearInterval(timer);
+        fillEl.style.width = '100%';
+        setTimeout(() => {
+          document.open();
+          document.write(html);
+          document.close();
+        }, 450);
+      } catch (err) {
+        clearInterval(timer);
+        overlay.classList.remove('show');
+        location.reload();
+      }
+    });
+  }
+</script>
+<script src="{{ url_for('static', filename='app.js') + '?v=20260913e' }}"></script>
+</body>
+</html>

@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analyse {{ symbol }} — TradeScope</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') + '?v=20260913e' }}">
+</head>
+<body>
+<div class="brand-bg" aria-hidden="true"></div>
+<header class="site">
+  <div class="container">
+    <a class="brand" href="/"><span class="mark">⇉</span> TradeScope</a>
+    <nav>
+      <a href="/">Nouvelle analyse</a>
+      <a href="/account">Mon compte</a>
+      <a href="/upgrade">Abonnement</a>
+    </nav>
+  </div>
+</header>
+
+<div class="container" style="padding-top:30px;">
+
+  <div class="bias-banner {{ plan.bias if has_direct else 'neutre' }} animate-pop">
+    <div>
+      {% if has_direct %}
+      <div class="big">
+        <span class="mode-pill mode-direct">TRADE DIRECT</span>
+        {{ plan.bias_label }} <span class="muted" style="font-size:16px;">— {{ symbol }} · unité {{ TIMEFRAMES[plan.source_tf].label }}</span>
+      </div>
+      <div class="muted small">{% if scope == 'Tous' %}Tous les timeframes analysés{% else %}Unité analysée : <b>{{ TIMEFRAMES[scope].label }}</b>{% endif %} · Confiance <span class="conf-badge conf-{{ plan.confidence }}">{{ plan.confidence }}</span></div>
+      {% else %}
+      <div class="big">
+        <span class="mode-pill mode-wait">PAS DE TRADE</span>
+        Aucune entrée au marché recommandée
+      </div>
+      <div class="muted small">Signal trop faible actuellement : on attend un meilleur point d'entrée plutôt que de se faire stopper.</div>
+      {% endif %}
+      {% if live_price %}
+      <div class="live-price">Prix actuel du marché <b>{{ symbol }}</b> : <span class="val pos">{{ live_price|fmt }}</span></div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if has_direct %}
+  <div class="panel trade-card animate-up">
+    <div class="trade-head">
+      <h2 style="margin:0">⚡ Position du moment (au marché)</h2>
+      <span class="key-tag">MEILLEUR SIGNAL · {{ TIMEFRAMES[plan.source_tf].label }}</span>
+    </div>
+    <table class="plan">
+      <tr><th>Prix du marché actuel</th><td class="val">{{ live_price|fmt if live_price else plan.last|fmt }}</td></tr>
+      <tr><th>Entrée au marché</th><td class="val {{ 'pos' if plan.bias == 'long' else ('neg' if plan.bias == 'short' else '') }}">{{ plan.direct.entry|fmt }}</td></tr>
+      <tr><th>Stop loss (SL)</th><td class="val neg">{{ plan.direct.sl|fmt }}</td></tr>
+      <tr><th>Objectif TP1 (1R)</th><td class="val pos">{{ plan.direct.tp1|fmt }}</td></tr>
+      <tr><th>Objectif TP2 (2R)</th><td class="val pos">{{ plan.direct.tp2|fmt }}</td></tr>
+      <tr><th>Objectif TP3 (3R)</th><td class="val pos">{{ plan.direct.tp3|fmt }}</td></tr>
+      <tr><th>Ratio gain / risque</th><td class="val pos">{{ '%.2f'|format(plan.rr) }} : 1</td></tr>
+    </table>
+    <p class="muted small" style="margin-top:10px;">Exécution : ordre au marché à la clôture de la bougie suivante. Dès que TP1 est touché, placez le SL au point d'entrée (trade sans risque). Ne risquez jamais plus de 1 à 2 % de votre compte.</p>
+  </div>
+  {% else %}
+  <div class="panel pending-card animate-up">
+    <div class="trade-head">
+      <h2 style="margin:0">🙈 Aucune entrée au marché pour l'instant</h2>
+      <span class="key-tag key-safe">PRUDENCE · AUCUN SIGNAL DIRECT</span>
+    </div>
+    <p class="muted small">Le signal actuel <b>n'est pas assez fiable</b> pour recommander une position au marché. Le meilleur plan : attendre un point d'entrée sur pullback (section ci-dessous) ou relancer l'analyse dans quelques minutes sur une autre unité de temps.</p>
+  </div>
+  {% endif %}
+
+  {% if best_limit %}
+  <div class="panel pending-card animate-up" style="animation-delay:.1s">
+    <div class="trade-head">
+      <h2 style="margin:0">📌 Ordre limite (zone d'entrée idéale)</h2>
+      <span class="key-tag key-safe">ORDRE LIMITE · {{ TIMEFRAMES[best_limit.source_tf].label }}</span>
+    </div>
+    {% if best_limit.alt %}
+    <div class="trigger-box">{{ best_limit.alt.trigger }}</div>
+    <table class="plan">
+      <tr><th>Entrée sur pullback</th><td class="val {{ 'pos' if best_limit.alt.bias == 'long' else 'neg' }}">{{ best_limit.alt.entry|fmt }}</td></tr>
+      <tr><th>Stop loss (SL)</th><td class="val neg">{{ best_limit.alt.sl|fmt }}</td></tr>
+      <tr><th>Objectif TP1 (1R)</th><td class="val pos">{{ best_limit.alt.tp1|fmt }}</td></tr>
+      <tr><th>Objectif TP2 (2R)</th><td class="val pos">{{ best_limit.alt.tp2|fmt }}</td></tr>
+      <tr><th>Objectif TP3 (3R)</th><td class="val pos">{{ best_limit.alt.tp3|fmt }}</td></tr>
+    </table>
+    {% else %}
+    <p class="muted small">Meilleur ordre limite : attente d'un rebond avant de s'exposer.</p>
+    {% endif %}
+    <p class="muted small">Même règle de gestion : TP1 touché → SL à l'entrée, puis gestion progressive.</p>
+  </div>
+  {% endif %}
+
+  {% if vision and vision.ok %}
+  <div class="panel vision-panel animate-up" style="animation-delay:.15s">
+    <div class="trade-head">
+      <h2 style="margin:0">🔍 Analyse du screenshot envoyé</h2>
+      <span class="key-tag">{{
+        'VISION IA' if vision.method == 'ai' else
+        'VISION LOCALE' if vision.method == 'local' else 'VISION'
+      }}</span>
+    </div>
+
+    <div class="verdict-banner verdict-{{ vision_verdict.cls if vision_verdict else '' }}">
+      <b>{{ vision_verdict.label if vision_verdict else 'Analyse de l image indisponible' }}</b>
+      <p class="muted small" style="margin:6px 0 0;">{{ vision_verdict.detail if vision_verdict else vision.error }}</p>
+    </div>
+
+    <table class="plan">
+      {% if vision.bias %}<tr><th>Biais détecté sur l'image</th><td class="val">{{ {'long':'ACHAT (LONG)','short':'VENTE (SHORT)','neutre':'NEUTRE'}.get(vision.bias, vision.bias) }}</td></tr>{% endif %}
+      {% if vision.confidence is not none %}<tr><th>Force du signal visuel</th><td class="val">{{ vision.confidence }} %</td></tr>{% endif %}
+      {% if vision.bars %}<tr><th>Bougies reconnues</th><td class="val">{{ vision.up }} haussières · {{ vision.down }} baissières ({{ vision.bars }} total)</td></tr>{% endif %}
+      {% if vision.recent %}<tr><th>Momentum immédiat (8 dernières)</th><td class="val">{{ vision.recent }}</td></tr>{% endif %}
+      {% if vision.symbol %}<tr><th>Symbole lu sur l'image</th><td class="val">{{ vision.symbol }}</td></tr>{% endif %}
+      {% if vision.timeframe %}<tr><th>Unité de temps lue</th><td class="val">{{ vision.timeframe }}</td></tr>{% endif %}
+      {% if vision.last_price %}<tr><th>Dernier prix lu</th><td class="val">{{ '%.5f'|format(vision.last_price) }}</td></tr>{% endif %}
+    </table>
+
+    <div class="muted small">
+      {% for note in vision.notes %}<p style="margin:4px 0;">· {{ note }}</p>{% endfor %}
+      <p style="margin-top:8px;">
+        {% if vision.supports %}<span class="tag tag-green">Support(s) visuel(s) : {{ vision.supports|length }}</span>{% endif %}
+        {% if vision.resistances %}<span class="tag tag-red">Résistance(s) visuelle(s) : {{ vision.resistances|length }}</span>{% endif %}
+      </p>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="panel reasons-panel animate-up" style="animation-delay:.2s">
+    <h2>Pourquoi prendre ces positions</h2>
+    <p class="muted small">Le raisonnement complet de l'analyste, étape par étape :</p>
+    {% for title, body in narrative %}
+    <div class="reason-block">
+      <div class="reason-title">{{ title }}</div>
+      <div class="reason-body">{{ body | safe }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="panel animate-up" style="animation-delay:.25s; overflow-x:auto;">
+    {% if scope == 'Tous' %}
+    <h2>Tous les timeframes analysés</h2>
+    <p class="muted small">Le biais, l'entrée et les cibles pour chaque unité de temps.</p>
+    {% else %}
+    <h2>Unité analysée : {{ TIMEFRAMES[scope].label }} ({{ symbol }})</h2>
+    <p class="muted small">Conformément à votre screenshot sur cette unité de temps.</p>
+    {% endif %}
+    <table class="plan">
+      <thead>
+        <tr>
+          <th>Unité</th><th>Biais</th><th>Confiance</th><th>Type</th>
+          <th>Entrée</th><th>SL</th><th>TP1</th><th>TP2</th><th>TP3</th><th>R/R</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr class="{{ 'row-best-direct' if row.is_best_direct }}{{ ' row-best-limit' if row.is_best_limit }}">
+          <td><b>{{ row.tf }}</b></td>
+          {% if row.plan %}
+            <td class="val {{ 'pos' if (row.plan and row.plan.bias == 'long') else ('neg' if (row.plan and row.plan.bias == 'short') else '') }}">{{ row.bias }}</td>
+            <td><span class="conf-badge conf-{{ row.conf }}">{{ row.conf }}</span></td>
+            <td>{{ '⚡ Direct' if row.is_direct else ('📌 Attente' if row.mode == 'attente_suggeree' else '🚫 Aucun') }}</td>
+            <td class="val">{{ row.entry|fmt }}</td>
+            <td class="val neg">{{ row.sl|fmt }}</td>
+            <td class="val">{{ row.tp1|fmt }}</td>
+            <td class="val">{{ row.tp2|fmt }}</td>
+            <td class="val">{{ row.tp3|fmt }}</td>
+            <td class="val">{{ '%.2f'|format(row.rr) if row.rr is not none else '—' }}</td>
+          {% else %}
+            <td colspan="9" class="muted">Données indisponibles</td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel animate-up" style="animation-delay:.3s">
+    <h2>Signaux techniques détectés</h2>
+    <ul class="reasons" id="reasons">
+      {% for reason in plan.reasons %}
+      <li>{{ reason }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+
+  <div class="panel animate-up" style="text-align:center; animation-delay:.35s;">
+    {% if unlimited %}
+      <p>Pass <b>illimité</b> actif. Bonne analyse.</p>
+      <a class="btn btn-green" href="/">Analyser un autre marché</a>
+    {% elif remaining and remaining > 0 %}
+      <p>Il vous reste <b>{{ remaining }}</b> analyse(s) gratuite(s).</p>
+      <a class="btn btn-green" href="/">Analyser un autre marché</a>
+    {% else %}
+      <h2 style="margin-bottom:8px;">3 analyses gratuites utilisées</h2>
+      <p class="muted">Passez au plan Abonnement pour continuer.</p>
+      <a class="btn btn-blue" href="/upgrade">Voir l'abonnement</a>
+    {% endif %}
+  </div>
+
+  <div class="disclaimer animate-up">
+    <b>Avertissement :</b> analyse générée automatiquement par TradeScope à partir de données de marché publiques et d'indicateurs techniques. Outil d'éducation, sans valeur de conseil en investissement. Le trading comporte un risque élevé de perte : n'engagez que des fonds dont vous pouvez accepter la perte. Les performances passées ne préjugent pas des performances futures.
+  </div>
+
+</div>
+
+<footer class="site">
+  <div class="container">
+    <span>© 2026 TradeScope — Outil d'analyse, pas un conseil en investissement.</span>
+    <span><a href="/" style="color:inherit">Nouvelle analyse</a></span>
+  </div>
+</footer>
+
+<script>
+  const items = document.querySelectorAll('#reasons li');
+  items.forEach((li, i) => {
+    li.style.opacity = 0;
+    li.style.transition = 'opacity .45s ease ' + (0.06 * i) + 's';
+  });
+  setTimeout(() => { items.forEach(li => li.style.opacity = 1); }, 120);
+</script>
+<script src="{{ url_for('static', filename='app.js') + '?v=20260913e' }}"></script>
+</body>
+</html>
