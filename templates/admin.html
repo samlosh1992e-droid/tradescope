@@ -21,6 +21,7 @@
   {% endwith %}
 
   <h1 style="font-size:26px;">📊 Tableau de bord <span class="muted small" style="font-weight:400;">(temps réel)</span></h1>
+  <p style="margin:8px 0 0;"><a class="btn btn-ghost" style="padding:6px 12px; font-size:13px;" href="/admin?t={{ token }}&action=testmail">✉️ Tester l'envoi d'email</a></p>
   <div class="grid-2" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); margin:16px 0;">
     <div class="panel" style="text-align:center;"><div style="font-size:28px;font-weight:800;" id="st-total" data-count>{{ stats.total_visits }}</div><div class="muted small">Pages vues</div></div>
     <div class="panel" style="text-align:center;"><div style="font-size:28px;font-weight:800;" id="st-unique" data-count>{{ stats.unique_visitors }}</div><div class="muted small">Visiteurs uniques</div></div>

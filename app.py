@@ -82,6 +82,12 @@ SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASS = os.environ.get("SMTP_PASS", "")
 MAIL_FROM = os.environ.get("MAIL_FROM", "tradescope@votredomaine.com")
 MAIL_TO_ADMIN = os.environ.get("MAIL_TO_ADMIN", "")  # ou sont notifies paiements/annulations
+# Envoi par API HTTPS (Render free bloque les ports SMTP 25/465/587).
+# Resend : https://resend.com (gratuit 3000 mails/mois).
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "").strip()
+# Brevo (ex-Sendinblue) : https://brevo.com (gratuit 300 mails/jour).
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "").strip()
+MAIL_FROM_NAME = os.environ.get("MAIL_FROM_NAME", "TradeScope").strip()
 
 DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
 MAIL_LOG = os.path.join(os.path.dirname(__file__), "mails.log")
@@ -1015,8 +1021,64 @@ def build_narrative(plan, symbol):
     return sections
 
 
+def _send_via_resend(to, subject, html):
+    """Envoi par l'API HTTPS Resend (fonctionne sur Render free)."""
+    import json as _json
+    import urllib.request as _ur
+    import urllib.error as _ue
+    sender = MAIL_FROM if "@" in MAIL_FROM and "votredomaine" not in MAIL_FROM else "onboarding@resend.dev"
+    if MAIL_FROM_NAME:
+        sender = f"{MAIL_FROM_NAME} <{sender}>"
+    payload = {"from": sender, "to": [to], "subject": subject, "html": html}
+    req = _ur.Request(
+        "https://api.resend.com/emails",
+        data=_json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={"Authorization": "Bearer " + RESEND_API_KEY,
+                 "Content-Type": "application/json"},
+    )
+    try:
+        with _ur.urlopen(req, timeout=20) as r:
+            print(f"[mail] Resend -> {r.status}")
+            return r.status in (200, 201)
+    except _ue.HTTPError as e:
+        print(f"[mail] Resend HTTP {e.code}: {e.read().decode('utf-8')[:200]}")
+        return False
+
+
+def _send_via_brevo(to, subject, html):
+    """Envoi par l'API HTTPS Brevo (fonctionne sur Render free)."""
+    import json as _json
+    import urllib.request as _ur
+    import urllib.error as _ue
+    payload = {
+        "sender": {"email": MAIL_FROM, "name": MAIL_FROM_NAME or "TradeScope"},
+        "to": [{"email": to}],
+        "subject": subject,
+        "htmlContent": html,
+    }
+    req = _ur.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=_json.dumps(payload).encode("utf-8"),
+        method="POST",
+        headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json",
+                 "Accept": "application/json"},
+    )
+    try:
+        with _ur.urlopen(req, timeout=20) as r:
+            print(f"[mail] Brevo -> {r.status}")
+            return r.status in (200, 201)
+    except _ue.HTTPError as e:
+        print(f"[mail] Brevo HTTP {e.code}: {e.read().decode('utf-8')[:200]}")
+        return False
+
+
 def send_mail(to, subject, text_html, categories=""):
-    """Envoie un email si SMTP configure, sinon le journalise dans mails.log."""
+    """Envoie un email via Resend/Brevo (API HTTPS) ou SMTP, sinon mails.log.
+
+    Retourne True si un envoi reel a reussi. Render free bloque les ports SMTP
+    classiques : utiliser de preference RESEND_API_KEY ou BREVO_API_KEY.
+    """
     entry = (
         "=" * 60 + "\n"
         f"TIME   : {datetime.now().isoformat()}\n"
@@ -1031,6 +1093,17 @@ def send_mail(to, subject, text_html, categories=""):
             f.write(entry)
     except Exception:
         pass
+
+    if RESEND_API_KEY:
+        try:
+            return _send_via_resend(to, subject, text_html)
+        except Exception as e:
+            print(f"[mail] Resend erreur: {type(e).__name__}: {e}")
+    if BREVO_API_KEY:
+        try:
+            return _send_via_brevo(to, subject, text_html)
+        except Exception as e:
+            print(f"[mail] Brevo erreur: {type(e).__name__}: {e}")
     if not SMTP_HOST:
         return False
     try:
@@ -1532,6 +1605,22 @@ def admin():
         if email:
             notify_cancel(email)
             flash("Abonnement resilie : " + email, "success")
+    elif action == "testmail":
+        dest = request.args.get("email", "").strip().lower() or MAIL_TO_ADMIN or MAIL_FROM
+        provider = ("Resend" if RESEND_API_KEY else
+                    "Brevo" if BREVO_API_KEY else
+                    "SMTP" if SMTP_HOST else "aucun")
+        if not dest:
+            flash("Aucun destinataire de test (definissez MAIL_TO_ADMIN).", "error")
+        else:
+            ok = send_mail(
+                dest, "TradeScope : test d'envoi",
+                "<p>Ceci est un <b>test</b> d'envoi d'email depuis TradeScope.</p>"
+                f"<p>Canal : {provider}.</p>", "test_mail")
+            if ok:
+                flash(f"Email envoye a {dest} (canal : {provider}).", "success")
+            else:
+                flash(f"Echec de l'envoi (canal : {provider}). Voir mails.log / variables d'env.", "error")
 
     # --- Stats dashboards ---
     def one(q):
