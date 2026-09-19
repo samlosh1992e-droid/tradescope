@@ -1030,6 +1030,9 @@ def build_narrative(plan, symbol):
     return sections
 
 
+_MAIL_UA = "TradeScope/1.0 (+https://tradescope-sjf6.onrender.com)"
+
+
 def _send_via_resend(to, subject, html):
     """Envoi par l'API HTTPS Resend (fonctionne sur Render free)."""
     import json as _json
@@ -1044,7 +1047,9 @@ def _send_via_resend(to, subject, html):
         data=_json.dumps(payload).encode("utf-8"),
         method="POST",
         headers={"Authorization": "Bearer " + RESEND_API_KEY,
-                 "Content-Type": "application/json"},
+                 "Content-Type": "application/json",
+                 "Accept": "application/json",
+                 "User-Agent": _MAIL_UA},
     )
     try:
         with _ur.urlopen(req, timeout=20) as r:
@@ -1071,7 +1076,8 @@ def _send_via_brevo(to, subject, html):
         data=_json.dumps(payload).encode("utf-8"),
         method="POST",
         headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json",
-                 "Accept": "application/json"},
+                 "Accept": "application/json",
+                 "User-Agent": _MAIL_UA},
     )
     try:
         with _ur.urlopen(req, timeout=20) as r:
