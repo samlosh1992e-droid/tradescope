@@ -35,7 +35,7 @@
 
     {% if sub and sub['status'] == 'active' %}
     <div class="alert success" style="margin:14px 0;">
-      <b>Abonnement actif</b> — plan {{ sub['plan'] }}, depuis {{ sub['started_at'][:10] }}.
+      <b>Abonnement actif</b> — plan {{ sub['plan']|planlabel }}{% if sub['expires_at'] %}, jusqu'au {{ sub['expires_at'][:10] }}{% else %} (à vie){% endif %}, depuis {{ sub['started_at'][:10] }}.
     </div>
     <p class="muted small">Gérez votre abonnement à tout moment. En le résiliant, l'accès illimité s'arrête <b>immédiatement</b>.</p>
     <form method="post" action="/account/cancel" onsubmit="return confirm('Résilier votre abonnement TradeScope ? L\'accès illimité sera coupé immédiatement.')">

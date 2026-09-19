@@ -30,36 +30,44 @@
   <div class="panel" style="max-width:520px; margin:20px auto; text-align:center;">
     <div class="muted small" style="text-transform:uppercase; letter-spacing:.5px;">Votre abonnement</div>
     <div style="font-size:30px; font-weight:800; color:var(--green); margin:10px 0;">Actif ✅</div>
-    <p class="muted small">Plan {{ sub['plan'] }} · Actif depuis {{ sub['started_at'][:10] }}</p>
+    <p class="muted small">Plan {{ sub['plan']|planlabel }}{% if sub['expires_at'] %} · jusqu'au {{ sub['expires_at'][:10] }}{% else %} · à vie{% endif %} · depuis {{ sub['started_at'][:10] }}</p>
     <a class="btn btn-blue" href="/" style="width:100%;">Analyser sans limite</a>
     <div style="margin-top:14px;">
       <a class="muted small" href="/account">Gérer / résilier mon abonnement</a>
     </div>
   </div>
   {% else %}
-  <div class="panel" style="max-width:520px; margin:20px auto; text-align:center;">
-    <div class="muted small" style="text-transform:uppercase; letter-spacing:.5px;">Plan</div>
-    <div style="font-size:40px; font-weight:800; color:var(--green); margin:8px 0;">{{ price }} <span style="font-size:15px; color:var(--muted);">/ mois</span></div>
-    <ul style="list-style:none; padding:0; margin:14px 0 20px; text-align:left;">
-      <li style="padding:7px 0; font-size:14.5px;">✓ Analyses de screenshots illimitées</li>
-      <li style="padding:7px 0; font-size:14.5px;">✓ Tous les marchés (crypto, or, forex, indices)</li>
-      <li style="padding:7px 0; font-size:14.5px;">✓ Les 7 unités de temps (M1 → H4) d'un coup</li>
-      <li style="padding:7px 0; font-size:14.5px;">✓ Position au marché + ordre limite, à chaque analyse</li>
-      <li style="padding:7px 0; font-size:14.5px;">✓ Plan complet : entrée, SL, TP1/TP2/TP3 + raisonnement</li>
-    </ul>
-    {% if pay_link or btc_enabled %}
-      {% if pay_link %}<a class="btn btn-blue" href="{{ pay_link }}" style="width:100%;">Payer par carte bancaire 💳</a>{% endif %}
+  <p class="muted" style="text-align:center; max-width:620px; margin:0 auto 6px;">3 analyses offertes par email pour essayer. Ensuite, choisissez votre formule — paiement unique, renouvellement manuel, résiliable à tout moment.</p>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:14px; max-width:900px; margin:20px auto;">
+    {% for key, p in plans.items() %}
+    <div class="panel" style="text-align:center; display:flex; flex-direction:column;">
+      <div class="muted small" style="text-transform:uppercase; letter-spacing:.5px;">{{ p.label }}</div>
+      <div style="font-size:34px; font-weight:800; color:var(--green); margin:6px 0;">{{ p.euro }} €</div>
+      <div class="muted small" style="margin-bottom:10px;">{% if p.days %}Accès pendant {{ p.days }} jours{% else %}Paiement unique — accès à vie{% endif %}</div>
+      <ul style="list-style:none; padding:0; margin:0 0 14px; text-align:left;">
+        <li style="padding:5px 0; font-size:14px;">✓ Analyses de screenshots illimitées</li>
+        <li style="padding:5px 0; font-size:14px;">✓ Tous les marchés (crypto, or, forex, indices)</li>
+        <li style="padding:5px 0; font-size:14px;">✓ 7 unités de temps d'un coup</li>
+        <li style="padding:5px 0; font-size:14px;">✓ Position + ordre limite à chaque analyse</li>
+      </ul>
       {% if btc_enabled %}
-      <form method="post" action="/pay/btc" style="margin-top:10px;">
-        <button class="btn" type="submit" style="width:100%; background:var(--panel-2); border:1px solid var(--line);">Payer en Bitcoin ₿ (wallet)</button>
+      <form method="post" action="/pay/btc" style="margin-top:auto;">
+        <input type="hidden" name="plan" value="{{ key }}">
+        <button class="btn" type="submit" style="width:100%; background:var(--panel-2); border:1px solid var(--line);">Payer en Bitcoin ₿</button>
       </form>
       {% endif %}
-      <p class="muted small" style="margin-top:10px;">Paiement sécurisé. Abonnement activé automatiquement dès réception du paiement. Résiliation à tout moment depuis « Mon compte ».</p>
-    {% else %}
-      <div class="alert success">Les paiements en ligne seront activés sous peu. En attendant, contactez l'équipe pour activer votre compte.</div>
-      <p class="muted small">Votre email : <b>{{ email or 'non renseigné' }}</b></p>
-    {% endif %}
+      {% if pay_link and key == 'month' %}
+      <a class="btn btn-blue" href="{{ pay_link }}" style="width:100%; margin-top:10px;">Payer par carte bancaire 💳</a>
+      {% endif %}
+    </div>
+    {% endfor %}
   </div>
+  {% if not pay_link and not btc_enabled %}
+    <div class="alert success" style="max-width:520px; margin:0 auto;">Les paiements en ligne seront activés sous peu. En attendant, contactez l'équipe pour activer votre compte.</div>
+    <p class="muted small" style="text-align:center;">Votre email : <b>{{ email or 'non renseigné' }}</b></p>
+  {% else %}
+    <p class="muted small" style="text-align:center; margin-top:10px;">Paiement sécurisé. Abonnement activé automatiquement dès réception du paiement. Renouvellement manuel : vous re-payez quand vous voulez continuer.</p>
+  {% endif %}
   {% endif %}
 
   {% if email and sub and sub['status'] == 'cancelled' %}

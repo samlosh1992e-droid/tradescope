@@ -20,7 +20,7 @@
 
 <div class="container" style="padding-top:40px;">
   <h1 style="font-size:28px; margin:0 0 6px;">Paiement en Bitcoin</h1>
-  <p class="muted">Abonnement <b>1 mois</b> · {{ price }} · résiliable à tout moment.</p>
+  <p class="muted">Abonnement <b>{{ plan.label }}</b> · {{ amount_eur }} €{% if plan.days > 0 %} · {{ plan.days }} jours d'accès{% else %} · accès à vie{% endif %}.</p>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for category, message in messages %}<div class="alert {{ category }}">{{ message }}</div>{% endfor %}
@@ -39,7 +39,7 @@
       <div style="font-size:20px; font-weight:800; color:var(--gold, #f0b90b); margin-top:10px;">
         {{ '%.8f'|format(amount_btc) }} BTC
       </div>
-      <p class="muted small">≈ {{ price }} (montant vérifié automatiquement sur la blockchain)</p>
+      <p class="muted small">≈ {{ amount_eur }} € (montant vérifié automatiquement sur la blockchain)</p>
     </div>
 
     <div class="panel">
@@ -57,7 +57,7 @@
   </div>
 
   <div class="disclaimer">
-    Le paiement est vérifié directement sur la blockchain Bitcoin (aucune carte). Une fois reçu et confirmé, votre abonnement est activé automatiquement et apparaît dans « Mon compte ». Rien n'est débité automatiquement ensuite : l'abonnement est <b>mensuel manuel</b>, vous re-payez chaque mois si vous voulez continuer, et vous pouvez résilier à tout moment.
+    Le paiement est vérifié directement sur la blockchain Bitcoin (aucune carte). Une fois reçu et confirmé, votre abonnement est activé automatiquement et apparaît dans « Mon compte ». Aucun débit automatique ensuite : le renouvellement est <b>manuel</b>, vous re-payez la même formule quand vous voulez continuer. La formule <b>À vie</b> n'a pas de renouvellement.
   </div>
 </div>
 

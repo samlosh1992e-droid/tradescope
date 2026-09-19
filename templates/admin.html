@@ -50,7 +50,7 @@
       <tr>
         <td>{{ s['email'] }}</td>
         <td><b class="{{ 'pos' if s['status'] == 'active' else 'neg' }}">{{ s['status'] }}</b></td>
-        <td>{{ s['plan'] }}</td>
+        <td>{{ s['plan']|planlabel }}{% if s['expires_at'] %}<br><span class="muted small">jusqu'au {{ s['expires_at'][:10] }}</span>{% else %}{% if s['plan'] in ('week','month','lifetime') %}<br><span class="muted small">à vie</span>{% endif %}{% endif %}</td>
         <td class="muted small">{{ (s['started_at'] or '')[:10] }}</td>
         <td class="muted small">{{ (s['cancelled_at'] or '')[:10] }}</td>
         <td>{{ s['credits'] if s['credits'] is not none else '—' }}</td>

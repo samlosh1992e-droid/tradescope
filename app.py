@@ -38,8 +38,15 @@ PAY_LINK = os.environ.get("PAY_LINK", "")
 FREE_CREDITS = int(os.environ.get("FREE_CREDITS", "3"))
 MAX_UPLOAD_BYTES = 8 * 1024 * 1024
 ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".webp"}
-PRICE = os.environ.get("PRICE", "4 900 XPF/mois")
-PRICE_XPF = int(os.environ.get("PRICE_XPF", "4900"))
+
+# ==== Formules payantes (euros) ====
+# days = 0 => acces illimite (a vie).
+PLANS = {
+    "week":     {"label": "1 semaine", "euro": 150, "days": 7},
+    "month":    {"label": "1 mois",    "euro": 300, "days": 30},
+    "lifetime": {"label": "À vie",     "euro": 500, "days": 0},
+}
+PRICE = os.environ.get("PRICE", "150 €/semaine · 300 €/mois · 500 € à vie")
 
 # ==== Paiement par BITCOIN (adresse de reception du portefeuille du proprio) ====
 BTC_ADDRESS = os.environ.get("BTC_ADDRESS", "").strip()
@@ -146,7 +153,8 @@ def init_db():
         " email TEXT PRIMARY KEY,"
         " status TEXT NOT NULL DEFAULT 'none',"
         " plan TEXT NOT NULL DEFAULT 'pro',"
-        " started_at TEXT, cancelled_at TEXT, updated_at TEXT)"
+        " started_at TEXT, cancelled_at TEXT, updated_at TEXT,"
+        " expires_at TEXT)"
     )
     conn.execute(
         "CREATE TABLE IF NOT EXISTS payments ("
@@ -154,9 +162,18 @@ def init_db():
         " email TEXT NOT NULL,"
         " method TEXT NOT NULL,"
         " btc_address TEXT, btc_sats INTEGER, fiat_xpf INTEGER,"
+        " plan TEXT, fiat_eur INTEGER,"
         " status TEXT NOT NULL DEFAULT 'pending',"
         " txid TEXT, created_at TEXT, updated_at TEXT)"
     )
+    # Migrations si une ancienne base existe (colonnes manquantes).
+    def _ensure_col(table, col, ddl):
+        cols = {r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        if col not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+    _ensure_col("subscriptions", "expires_at", "expires_at TEXT")
+    _ensure_col("payments", "plan", "plan TEXT")
+    _ensure_col("payments", "fiat_eur", "fiat_eur INTEGER")
     conn.commit()
     conn.close()
 
@@ -208,27 +225,59 @@ def get_subscription(email):
     return row
 
 
-def set_subscription(email, status, plan="pro"):
+def set_subscription(email, status, plan="pro", expires_at=None):
     now = datetime.now().isoformat()
     conn = get_db()
     conn.execute(
-        "INSERT INTO subscriptions(email, status, plan, started_at, updated_at) "
-        "VALUES (?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET "
-        "status=?, updated_at=?",
-        (email, status, plan, now, now, status, now),
+        "INSERT INTO subscriptions(email, status, plan, started_at, updated_at, expires_at) "
+        "VALUES (?,?,?,?,?,?) ON CONFLICT(email) DO UPDATE SET "
+        "status=?, plan=?, updated_at=?, expires_at=?",
+        (email, status, plan, now, now, expires_at, status, plan, now, expires_at),
     )
     conn.commit()
     conn.close()
 
 
+def _plan_label(p):
+    """Libelle humain d'un plan ('week' -> '1 semaine')."""
+    return PLANS.get(p or "", {}).get("label") or (p or "—")
+
+
+app.jinja_env.filters["planlabel"] = _plan_label
+
+
 def is_unlimited(email, credits):
-    """... admin, credits=-1, OU abonnement actif (payeur)."""
+    """... admin, credits=-1, OU abonnement actif (non expire) / a vie."""
     if email in ADMIN_EMAILS:
         return True
+    sub = get_subscription(email)
+    if sub and sub["status"] == "active":
+        exp = sub["expires_at"] if "expires_at" in sub.keys() else None
+        if not exp:
+            return True  # abonnement a vie
+        try:
+            if datetime.fromisoformat(exp) > datetime.now():
+                return True
+        except Exception:
+            return True
+        # abonnement expire : on bascule proprement
+        try:
+            conn = get_db()
+            conn.execute(
+                "UPDATE subscriptions SET status='expired', updated_at=? WHERE email=?",
+                (datetime.now().isoformat(), email),
+            )
+            conn.execute(
+                "UPDATE users SET credits=? WHERE email=? AND credits=-1",
+                (FREE_CREDITS, email),
+            )
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
     if credits is not None and credits == -1:
         return True
-    sub = get_subscription(email)
-    return bool(sub and sub["status"] == "active")
+    return False
 
 
 def _download(symbol, interval, period, tries=3):
@@ -981,26 +1030,35 @@ def send_mail(to, subject, text_html, categories=""):
         return False
 
 
-def notify_payment_ok(email, plan="pro"):
-    set_subscription(email, "active", plan)
+def notify_payment_ok(email, plan="month"):
+    """Active l'abonnement d'un payeur. plan dans PLANS ; a vie si days == 0."""
+    days = PLANS.get(plan, PLANS["week"]).get("days", 0)
+    expires_at = None
+    if days > 0:
+        import datetime as _dt
+        expires_at = (datetime.now() + _dt.timedelta(days=days)).isoformat()
+    set_subscription(email, "active", plan, expires_at)
     # Un payeur devient ILLIMITE (plus de compte de credits).
     conn = get_db()
     conn.execute("UPDATE users SET credits=-1 WHERE email=?", (email,))
     conn.commit()
     conn.close()
+    label = PLANS.get(plan, {}).get("label", plan)
     html = (
+
         f"<h2>Paiement accepte ✅</h2>"
         f"<p>Bonjour {email},</p>"
-        f"<p>Votre abonnement TradeScope <b>{plan}</b> est <b>actif</b>.</p>"
-        f"<ul><li>Analyses <b>illimitees</b> sur tous les timeframes</li>"
+        f"<p>Votre abonnement TradeScope <b>{label}</b> est <b>actif</b>"
+        + (f" jusqu'au <b>{expires_at[:10]}</b>.</p>" if expires_at else " (accès à vie).</p>")
+        + f"<ul><li>Analyses <b>illimitees</b> sur tous les timeframes</li>"
         f"<li>Position du moment + ordres limites</li></ul>"
         f"<p>Bonne analyse.</p>"
     )
     send_mail(email, "TradeScope : paiement accepte, abonnement actif", html, "payment_ok")
     if MAIL_TO_ADMIN:
         send_mail(MAIL_TO_ADMIN,
-                  f"[Admin] Paiement accepte: {email}",
-                  f"<p>{email} vient de payer l'abonnement {plan}.</p>",
+                  f"[Admin] Paiement accepte: {email} ({label})",
+                  f"<p>{email} vient de payer l'abonnement {label}.</p>",
                   "admin_payment")
     return True
 
@@ -1038,7 +1096,8 @@ def upgrade():
     email = get_email()
     sub = get_subscription(email) if email else None
     return render_template("upgrade.html", pay_link=PAY_LINK, email=email,
-                           price=PRICE, sub=sub, btc_enabled=bool(BTC_ADDRESS))
+                           price=PRICE, sub=sub, btc_enabled=bool(BTC_ADDRESS),
+                           plans=PLANS)
 
 
 @app.route("/account")
@@ -1098,7 +1157,7 @@ def webhook_paypal():
 # le site affiche un QR + montant exact, puis VERIFIE la blockchain
 # (mempool.space, API publique) pour activer l'abonnement des qu'il recoit
 # le paiement. Robuste meme derriere un tunnel (polling sortant).
-_BTC_RATE_CACHE = {"t": 0.0, "sats_per_xpf": 0.0}
+_BTC_RATE_CACHE = {"t": 0.0, "sats_per_eur": 0.0}
 
 
 def _http_json(url, timeout=12):
@@ -1131,38 +1190,38 @@ def _btc_usd_price():
     return None
 
 
-def _btc_sats_per_xpf():
-    """Satoshi par franc CFP, cache 5 min (prix BTC + Frankfurter/ECB, sans cle)."""
+def _btc_sats_per_eur():
+    """Satoshi par euro, cache 5 min (prix BTC + Frankfurter/ECB, sans cle)."""
     now = time.time()
-    if now - _BTC_RATE_CACHE["t"] < 300 and _BTC_RATE_CACHE["sats_per_xpf"]:
-        return _BTC_RATE_CACHE["sats_per_xpf"]
+    if now - _BTC_RATE_CACHE["t"] < 300 and _BTC_RATE_CACHE["sats_per_eur"]:
+        return _BTC_RATE_CACHE["sats_per_eur"]
     try:
         btc_usd = _btc_usd_price()
-        usd_per_xpf = _usd_per_xpf()
-        if usd_per_xpf and btc_usd:
-            sats = usd_per_xpf / btc_usd * 1e8
+        usd_per_eur = _usd_per_eur()
+        if usd_per_eur and btc_usd:
+            sats = usd_per_eur / btc_usd * 1e8
             if sats > 0:
-                _BTC_RATE_CACHE.update({"t": now, "sats_per_xpf": sats})
+                _BTC_RATE_CACHE.update({"t": now, "sats_per_eur": sats})
                 return sats
     except Exception as e:
         print(f"[btc] taux: {type(e).__name__}: {e}")
-    return _BTC_RATE_CACHE["sats_per_xpf"] or None
+    return _BTC_RATE_CACHE["sats_per_eur"] or None
 
 
 _BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36")
 
 
-def _usd_per_xpf():
-    """USD -> XPF. Parite fixe 1 EUR = 119.33 XPF. Frankfurter (ECB) exige un
-    User-Agent navigateur ; repli sur open.er-api.com qui donne XPF directement."""
+def _usd_per_eur():
+    """Dollar par euro. Frankfurter (ECB) exige d'abord un User-Agent navigateur ;
+    repli sur open.er-api.com + parite fixe 1 EUR = 119.33 XPF."""
     import json as _json
     import urllib.request as _ur
     urls = (
-        ("https://api.frankfurter.app/latest?base=USD&symbols=EUR",
-         lambda d: (1.0 / 119.33) / float(d["rates"]["EUR"])),
+        ("https://api.frankfurter.app/latest?base=EUR&symbols=USD",
+         lambda d: float(d["rates"]["USD"])),
         ("https://open.er-api.com/v6/latest/USD",
-         lambda d: 1.0 / float(d["rates"]["XPF"])),
+         lambda d: 119.33 / float(d["rates"]["XPF"])),
     )
     for url, pick in urls:
         try:
@@ -1170,26 +1229,33 @@ def _usd_per_xpf():
             with _ur.urlopen(req, timeout=12) as resp:
                 return pick(_json.loads(resp.read().decode("utf-8")))
         except Exception as e:
-            print(f"[btc] xpf: {type(e).__name__}: {e}")
+            print(f"[btc] eur: {type(e).__name__}: {e}")
     return None
 
 
-def _create_btc_order(email):
+def _plan_euros(plan):
+    """Montant en euros d'un plan (fallback : semaine)."""
+    return PLANS.get(plan, PLANS["week"])["euro"]
+
+
+def _create_btc_order(email, plan):
     if not BTC_ADDRESS:
         return None, "Le paiement Bitcoin n'est pas encore activé (aucune adresse de réception configurée)."
-    sats_per_xpf = _btc_sats_per_xpf()
-    if not sats_per_xpf:
+    plan = plan if plan in PLANS else "week"
+    sats_per_eur = _btc_sats_per_eur()
+    if not sats_per_eur:
         return None, "Taux BTC temporairement indisponible, réessayez dans un instant."
     import random
+    euros = _plan_euros(plan)
     # montant exact LEGEREMENT differendi entre clients (pas d'adresse unique)
-    sats = int(round(PRICE_XPF * sats_per_xpf)) + random.randint(0, 1999)
+    sats = int(round(euros * sats_per_eur)) + random.randint(0, 1999)
     oid = uuid.uuid4().hex
     now = datetime.now().isoformat()
     conn = get_db()
     conn.execute(
-        "INSERT INTO payments(id, email, method, btc_address, btc_sats, fiat_xpf,"
-        " status, txid, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-        (oid, email, "btc", BTC_ADDRESS, sats, PRICE_XPF,
+        "INSERT INTO payments(id, email, method, btc_address, btc_sats, plan, fiat_eur,"
+        " status, txid, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (oid, email, "btc", BTC_ADDRESS, sats, plan, euros,
          "pending", "", now, now),
     )
     conn.commit()
@@ -1203,7 +1269,10 @@ def pay_btc():
     if not email:
         flash("Enregistrez d'abord votre email.", "error")
         return redirect(url_for("index") + "#start")
-    oid, err = _create_btc_order(email)
+    plan = (request.form.get("plan") or "week").strip().lower()
+    if plan not in PLANS:
+        plan = "week"
+    oid, err = _create_btc_order(email, plan)
     if err:
         flash(err, "error")
         return redirect(url_for("upgrade"))
@@ -1226,6 +1295,9 @@ def pay_btc_page(oid):
     email = get_email()
     if email and email != row["email"]:
         abort(404)  # order prive
+    plan_key = row["plan"] if row["plan"] in PLANS else "month"
+    plan = PLANS[plan_key]
+    amount_eur = row["fiat_eur"] if row["fiat_eur"] else plan["euro"]
     amount = row["btc_sats"] / 1e8
     bip21 = f"bitcoin:{row['btc_address']}?amount={amount:.8f}"
     qr = None
@@ -1243,8 +1315,9 @@ def pay_btc_page(oid):
     except Exception:
         qr = None
     return render_template(
-        "payout.html", pay=row, amount_btc=amount, bip21=bip21, qr=qr,
-        email=email, price=PRICE, sub=get_subscription(row["email"]),
+        "payout.html", pay=row, plan=plan, amount_eur=amount_eur,
+        amount_btc=amount, bip21=bip21, qr=qr,
+        email=email, sub=get_subscription(row["email"]),
     )
 
 
@@ -1284,11 +1357,11 @@ def _check_order(o):
                 )
                 conn.commit()
                 conn.close()
-                notify_payment_ok(o["email"])
+                notify_payment_ok(o["email"], o["plan"] if "plan" in o.keys() else "month")
                 _track("pay_btc_paid", "/pay/btc/status")
                 return True
     except Exception as e:
-        print(f"[btc] ordre {o.get('id')}: {type(e).__name__}: {e}")
+        print(f"[btc] ordre {o and o.get('id')}: {type(e).__name__}: {e}")
     return False
 
 
