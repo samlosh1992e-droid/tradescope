@@ -1109,15 +1109,35 @@ def _http_json(url, timeout=12):
         return _json.loads(resp.read().decode("utf-8"))
 
 
+def _btc_usd_price():
+    """Prix BTC en USD, plusieurs sources sans cle (CoinGecko -> Coinbase -> Blockchain.info)."""
+    import json as _json
+    import urllib.request as _ur
+    sources = (
+        ("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd",
+         lambda d: float(d["bitcoin"]["usd"])),
+        ("https://api.coinbase.com/v2/prices/BTC-USD/spot",
+         lambda d: float(d["data"]["amount"])),
+        ("https://blockchain.info/ticker",
+         lambda d: float(d["USD"]["last"])),
+    )
+    for url, pick in sources:
+        try:
+            req = _ur.Request(url, headers={"User-Agent": _BROWSER_UA})
+            with _ur.urlopen(req, timeout=12) as resp:
+                return pick(_json.loads(resp.read().decode("utf-8")))
+        except Exception as e:
+            print(f"[btc] prix: {type(e).__name__}: {e}")
+    return None
+
+
 def _btc_sats_per_xpf():
-    """Satoshi par franc CFP, cache 5 min (CoinGecko + Frankfurter/ECB, sans cle)."""
+    """Satoshi par franc CFP, cache 5 min (prix BTC + Frankfurter/ECB, sans cle)."""
     now = time.time()
     if now - _BTC_RATE_CACHE["t"] < 300 and _BTC_RATE_CACHE["sats_per_xpf"]:
         return _BTC_RATE_CACHE["sats_per_xpf"]
     try:
-        btc_usd = float(_http_json(
-            "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
-        )["bitcoin"]["usd"])
+        btc_usd = _btc_usd_price()
         usd_per_xpf = _usd_per_xpf()
         if usd_per_xpf and btc_usd:
             sats = usd_per_xpf / btc_usd * 1e8
@@ -1137,6 +1157,7 @@ def _usd_per_xpf():
     """USD -> XPF. Parite fixe 1 EUR = 119.33 XPF. Frankfurter (ECB) exige un
     User-Agent navigateur ; repli sur open.er-api.com qui donne XPF directement."""
     import json as _json
+    import urllib.request as _ur
     urls = (
         ("https://api.frankfurter.app/latest?base=USD&symbols=EUR",
          lambda d: (1.0 / 119.33) / float(d["rates"]["EUR"])),
@@ -1145,8 +1166,8 @@ def _usd_per_xpf():
     )
     for url, pick in urls:
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": _BROWSER_UA})
-            with urllib.request.urlopen(req, timeout=12) as resp:
+            req = _ur.Request(url, headers={"User-Agent": _BROWSER_UA})
+            with _ur.urlopen(req, timeout=12) as resp:
                 return pick(_json.loads(resp.read().decode("utf-8")))
         except Exception as e:
             print(f"[btc] xpf: {type(e).__name__}: {e}")
