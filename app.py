@@ -1208,8 +1208,46 @@ def pay_btc_page(oid):
 
 @app.route("/pay/btc/status/<oid>")
 def pay_btc_status(oid):
-    row = _row_or_404("SELECT status FROM payments WHERE id=?", (oid,))
+    row = _row_or_404("SELECT * FROM payments WHERE id=?", (oid,))
+    if row["status"] == "pending":
+        # VeRIF ONDEMAND : meme si l'instance Render (plan gratuit) a "dormi"
+        # et que le scanner de fond etait en pause, la page de paiement qui
+        # s'interroge toutes les 8s re-active la verification ici.
+        if time.time() - _LAST_OND.get(oid, 0.0) >= 25:
+            _LAST_OND[oid] = time.time()
+            _check_order(row)
+        row = _row_or_404("SELECT status FROM payments WHERE id=?", (oid,))
     return jsonify(status=row["status"])
+
+
+_LAST_OND = {}
+
+
+def _check_order(o):
+    """Verifie une commande BTC en attente ; active l'abonnement si paye."""
+    try:
+        txs = _btc_address_txs(o["btc_address"])
+        for tx in txs:
+            st = tx.get("status") or {}
+            if not st.get("confirmed"):
+                continue
+            sats = sum(v.get("value", 0) for v in tx.get("vout", [])
+                       if v.get("scriptpubkey_address") == o["btc_address"])
+            if sats >= (o["btc_sats"] or 0) - 500:
+                conn = get_db()
+                conn.execute(
+                    "UPDATE payments SET status='paid', txid=?, updated_at=? "
+                    "WHERE id=? AND status='pending'",
+                    (tx.get("txid", ""), datetime.now().isoformat(), o["id"]),
+                )
+                conn.commit()
+                conn.close()
+                notify_payment_ok(o["email"])
+                _track("pay_btc_paid", "/pay/btc/status")
+                return True
+    except Exception as e:
+        print(f"[btc] ordre {o.get('id')}: {type(e).__name__}: {e}")
+    return False
 
 
 def _btc_address_txs(addr):
@@ -1230,28 +1268,9 @@ def btc_scanner_loop():
             orders = conn.execute(
                 "SELECT * FROM payments WHERE method='btc' AND status='pending'"
             ).fetchall()
-            for o in orders:
-                try:
-                    txs = _btc_address_txs(o["btc_address"])
-                    for tx in txs:
-                        st = tx.get("status") or {}
-                        if not st.get("confirmed"):
-                            continue
-                        sats = sum(v.get("value", 0) for v in tx.get("vout", [])
-                                   if v.get("scriptpubkey_address") == o["btc_address"])
-                        if sats >= (o["btc_sats"] or 0) - 500:
-                            conn.execute(
-                                "UPDATE payments SET status='paid', txid=?, updated_at=? "
-                                "WHERE id=? AND status='pending'",
-                                (tx.get("txid", ""), datetime.now().isoformat(), o["id"]),
-                            )
-                            conn.commit()
-                            notify_payment_ok(o["email"])
-                            _track("pay_btc_paid", "/pay/btc/status")
-                            break
-                except Exception as e:
-                    print(f"[btc] ordre {o.get('id')}: {type(e).__name__}: {e}")
             conn.close()
+            for o in orders:
+                _check_order(o)
         except Exception as e:
             print(f"[btc] scan: {type(e).__name__}: {e}")
         time.sleep(60)
