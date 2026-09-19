@@ -1110,7 +1110,7 @@ def _http_json(url, timeout=12):
 
 
 def _btc_sats_per_xpf():
-    """Satoshi par franc CFP, cache 5 min (CoinGecko + Frankfurter, sans cle)."""
+    """Satoshi par franc CFP, cache 5 min (CoinGecko + Frankfurter/ECB, sans cle)."""
     now = time.time()
     if now - _BTC_RATE_CACHE["t"] < 300 and _BTC_RATE_CACHE["sats_per_xpf"]:
         return _BTC_RATE_CACHE["sats_per_xpf"]
@@ -1118,18 +1118,39 @@ def _btc_sats_per_xpf():
         btc_usd = float(_http_json(
             "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd"
         )["bitcoin"]["usd"])
-        eur_per_usd = float(_http_json(
-            "https://api.frankfurter.app/latest?base=USD&symbols=EUR"
-        )["rates"]["EUR"])
-        # 1 XPF = 1/119.33 EUR (parite fixe) ; 1 USD = eur_per_usd EUR
-        usd_per_xpf = (1.0 / 119.33) / eur_per_usd
-        sats = usd_per_xpf / btc_usd * 1e8
-        if sats > 0:
-            _BTC_RATE_CACHE.update({"t": now, "sats_per_xpf": sats})
-            return sats
+        usd_per_xpf = _usd_per_xpf()
+        if usd_per_xpf and btc_usd:
+            sats = usd_per_xpf / btc_usd * 1e8
+            if sats > 0:
+                _BTC_RATE_CACHE.update({"t": now, "sats_per_xpf": sats})
+                return sats
     except Exception as e:
         print(f"[btc] taux: {type(e).__name__}: {e}")
     return _BTC_RATE_CACHE["sats_per_xpf"] or None
+
+
+_BROWSER_UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+               "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36")
+
+
+def _usd_per_xpf():
+    """USD -> XPF. Parite fixe 1 EUR = 119.33 XPF. Frankfurter (ECB) exige un
+    User-Agent navigateur ; repli sur open.er-api.com qui donne XPF directement."""
+    import json as _json
+    urls = (
+        ("https://api.frankfurter.app/latest?base=USD&symbols=EUR",
+         lambda d: (1.0 / 119.33) / float(d["rates"]["EUR"])),
+        ("https://open.er-api.com/v6/latest/USD",
+         lambda d: 1.0 / float(d["rates"]["XPF"])),
+    )
+    for url, pick in urls:
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": _BROWSER_UA})
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                return pick(_json.loads(resp.read().decode("utf-8")))
+        except Exception as e:
+            print(f"[btc] xpf: {type(e).__name__}: {e}")
+    return None
 
 
 def _create_btc_order(email):
