@@ -1,6 +1,7 @@
 import os
 import sqlite3
 import time
+import threading
 import uuid
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
@@ -672,6 +673,9 @@ def _analyse_image_mode(email, credits, unlimited, symbol, tf):
 
     _track("analyse_image", "/analyser")
 
+    send_analysis_email(email, symbol, TIMEFRAMES[tf_key]["label"], plan_img,
+                        vision=vision, image_mode=True)
+
     return render_template(
         "result_image.html",
         symbol=symbol,
@@ -836,6 +840,11 @@ def analyser():
         remaining = -1
 
     _track("analyse", "/analyser")
+
+    send_analysis_email(
+        email, symbol,
+        "Tous les timeframes" if scope == "Tous" else TIMEFRAMES[scope]["label"],
+        plan_out, narrative)
 
     rows = []
     for k in tf_keys:
@@ -1123,6 +1132,56 @@ def send_mail(to, subject, text_html, categories=""):
     except Exception as e:
         print(f"[mail] SMTP erreur: {type(e).__name__}: {e}")
         return False
+
+
+def _fmt_num(v):
+    try:
+        return ("%.4f" % float(v)).rstrip("0").rstrip(".")
+    except Exception:
+        return str(v)
+
+
+def _plan_email_html(symbol, tf_label, plan, narrative=None, vision=None):
+    """Corps HTML de l'email d'analyse (plan + niveaux + explications)."""
+    d = (plan.get("direct") or plan.get("alt") or {}) if plan else {}
+    rows = [("Marché", symbol), ("Unité de temps", tf_label)]
+    if plan:
+        rows.append(("Biais", "%s (%s)" % (plan.get("bias_label", "—"), plan.get("confidence", "—"))))
+    if vision and vision.get("bias_label"):
+        rows.append(("Verdict de l'image",
+                     "%s (%s%%)" % (vision.get("bias_label"), vision.get("confidence", ""))))
+    for k, lab in (("entry", "Entrée"), ("sl", "Stop loss"), ("tp1", "TP1"),
+                   ("tp2", "TP2"), ("tp3", "TP3")):
+        if d.get(k) is not None:
+            rows.append((lab, _fmt_num(d[k])))
+    if plan and plan.get("rr"):
+        rows.append(("Ratio gain/risque", "%s : 1" % plan["rr"]))
+    tbl = "".join(
+        "<tr><th style='text-align:left;padding:4px 10px;color:#9aa4b2;font-weight:400'>%s</th>"
+        "<td style='padding:4px 10px;font-weight:600'>%s</td></tr>" % (k, v) for k, v in rows)
+    secs = "".join(
+        "<h3 style='margin:18px 0 6px'>%s</h3><p style='margin:0;line-height:1.5'>%s</p>" % (t, h)
+        for t, h in (narrative or []))
+    return (
+        "<div style='font-family:Arial,Helvetica,sans-serif;max-width:560px;color:#e8edf3;"
+        "background:#0e1420;padding:20px;border-radius:12px'>"
+        "<h2 style='margin:0 0 10px'>TradeScope — votre plan d'action</h2>"
+        "<table style='border-collapse:collapse;font-size:15px'>" + tbl + "</table>" + secs +
+        "<p style='color:#9aa4b2;font-size:12px;margin-top:18px'>Analyse éducative, "
+        "pas un conseil en investissement. Ne risquez jamais plus de 1 à 2 % de votre capital. "
+        "TP1 touché → remontez le stop au point d'entrée.</p></div>"
+    )
+
+
+def send_analysis_email(email, symbol, tf_label, plan, narrative=None, vision=None, image_mode=False):
+    """Envoie l'analyse par email en tache de fond (ne bloque pas la reponse)."""
+    try:
+        html = _plan_email_html(symbol, tf_label, plan, narrative, vision)
+        subject = "TradeScope : votre plan d'action %s%s" % (
+            symbol, " (depuis votre screenshot)" if image_mode else "")
+        threading.Thread(target=send_mail, args=(email, subject, html, "analyse"), daemon=True).start()
+    except Exception as e:
+        print(f"[mail] analyse: {type(e).__name__}: {e}")
 
 
 def notify_payment_ok(email, plan="month"):
