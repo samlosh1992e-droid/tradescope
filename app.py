@@ -86,6 +86,8 @@ MAIL_TO_ADMIN = os.environ.get("MAIL_TO_ADMIN", "")  # ou sont notifies paiement
 DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
 MAIL_LOG = os.path.join(os.path.dirname(__file__), "mails.log")
 
+import persistence as _persist
+
 _IMAGES = {}
 _QUOTES_CACHE = {"t": 0.0, "data": []}
 TICKER_SYMBOLS = ["GC=F"]
@@ -122,6 +124,14 @@ def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def _persist_mark():
+    """Marque la base comme modifiee -> sauvegarde asynchrone (non bloquant)."""
+    try:
+        _persist.request_push(get_db)
+    except Exception:
+        pass
 
 
 def normalize_email(email):
@@ -175,6 +185,14 @@ def init_db():
     _ensure_col("payments", "plan", "plan TEXT")
     _ensure_col("payments", "fiat_eur", "fiat_eur INTEGER")
     conn.commit()
+    # Base vide (disque ephemere Render : perdue a chaque spin-down) -> on
+    # restaure le dernier snapshot sauvegarde sur GitHub si present.
+    try:
+        n = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        if not n:
+            _persist.restore(get_db)
+    except Exception:
+        pass
     conn.close()
 
 
@@ -214,6 +232,7 @@ def require_email():
         )
         conn.commit()
         conn.close()
+        _persist_mark()
         return FREE_CREDITS
     return row["credits"]
 
@@ -236,6 +255,7 @@ def set_subscription(email, status, plan="pro", expires_at=None):
     )
     conn.commit()
     conn.close()
+    _persist_mark()
 
 
 def _plan_label(p):
@@ -640,6 +660,7 @@ def _analyse_image_mode(email, credits, unlimited, symbol, tf):
         remaining = conn.execute(
             "SELECT credits FROM users WHERE email = ?", (email,)).fetchone()["credits"]
         conn.close()
+        _persist_mark()
     else:
         remaining = -1
 
@@ -804,6 +825,7 @@ def analyser():
         remaining = conn.execute(
             "SELECT credits FROM users WHERE email = ?", (email,)).fetchone()["credits"]
         conn.close()
+        _persist_mark()
     else:
         remaining = -1
 
@@ -1043,6 +1065,7 @@ def notify_payment_ok(email, plan="month"):
     conn.execute("UPDATE users SET credits=-1 WHERE email=?", (email,))
     conn.commit()
     conn.close()
+    _persist_mark()
     label = PLANS.get(plan, {}).get("label", plan)
     html = (
 
@@ -1074,6 +1097,7 @@ def notify_cancel(email):
     conn.execute("UPDATE users SET credits=0 WHERE email=?", (email,))
     conn.commit()
     conn.close()
+    _persist_mark()
     html = (
         f"<h2>Abonnement resilie</h2>"
         f"<p>Bonjour {email},</p>"
@@ -1260,6 +1284,7 @@ def _create_btc_order(email, plan):
     )
     conn.commit()
     conn.close()
+    _persist_mark()
     return oid, None
 
 
@@ -1484,6 +1509,7 @@ def admin():
                 (email, credits, datetime.now().isoformat(), credits),
             )
             conn.commit()
+            _persist_mark()
             flash("Credits ajoutes a " + email, "success")
     elif action == "unlimited":
         email = request.args.get("email", "").strip().lower()
@@ -1494,6 +1520,7 @@ def admin():
                 (email, -1, datetime.now().isoformat()),
             )
             conn.commit()
+            _persist_mark()
             flash("Pass illimite accorde a " + email, "success")
     elif action == "paid":
         email = request.args.get("email", "").strip().lower()
