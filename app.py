@@ -1676,7 +1676,7 @@ def admin():
     conn = get_db()
     action = request.args.get("action")
     if action == "add":
-        email = request.args.get("email", "").strip().lower()
+        email = normalize_email(request.args.get("email", ""))
         try:
             credits = int(request.args.get("credits", "10"))
         except ValueError:
@@ -1691,7 +1691,7 @@ def admin():
             _persist_mark()
             flash("Credits ajoutes a " + email, "success")
     elif action == "unlimited":
-        email = request.args.get("email", "").strip().lower()
+        email = normalize_email(request.args.get("email", ""))
         if email:
             conn.execute(
                 "INSERT INTO users (email, credits, created_at) VALUES (?,?,?) "
@@ -1702,12 +1702,12 @@ def admin():
             _persist_mark()
             flash("Pass illimite accorde a " + email, "success")
     elif action == "paid":
-        email = request.args.get("email", "").strip().lower()
+        email = normalize_email(request.args.get("email", ""))
         if email:
             notify_payment_ok(email)
             flash("Abonnement actif (paiement valide manuellement) : " + email, "success")
     elif action == "cancel":
-        email = request.args.get("email", "").strip().lower()
+        email = normalize_email(request.args.get("email", ""))
         if email:
             notify_cancel(email)
             flash("Abonnement resilie : " + email, "success")
